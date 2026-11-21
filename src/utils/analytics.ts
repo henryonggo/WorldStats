@@ -2,11 +2,15 @@ import type {
   AgeBracket,
   CityRecord,
   CountryRecord,
+  CountrySortKey,
+  DataYear,
   LiveWorldCounters,
   Region,
   RegressionResult,
 } from '../types/worldStats';
+import { DEFAULT_DATA_YEAR } from '../types/worldStats';
 import {
+  formatCityDataYear,
   getCitySourceCitation,
   getCountrySourceCitation,
   NATIONAL_OFFICE_BY_COUNTRY,
@@ -77,18 +81,146 @@ export function computeDependencyRatio(ageBrackets: AgeBracket[]): number {
   return Number(((dependent / working) * 100).toFixed(1));
 }
 
-export function computeProjectedChange2050Pct(country: CountryRecord): number {
-  const p2025 = country.projections.find((p) => p.year === 2025)?.medium ?? country.populationMillions;
-  const p2050 = country.projections.find((p) => p.year === 2050)?.medium ?? p2025;
-  if (p2025 <= 0) return 0;
-  return Number((((p2050 - p2025) / p2025) * 100).toFixed(1));
+/**
+ * Projects a country's baseline 2025 record to the selected reporting year (2024, 2025, or 2026)
+ * using each nation's annual demographic & macroeconomic trajectory.
+ */
+export function projectCountryForYear(
+  country: CountryRecord,
+  year: DataYear = DEFAULT_DATA_YEAR
+): CountryRecord {
+  const deltaYears = year - 2025;
+  if (deltaYears === 0) return country;
+
+  const popFactor = Math.pow(1 + country.annualPopGrowthPct / 100, deltaYears);
+  // Nominal USD GDP growth blends real growth + modest ~1.4% USD deflator trend
+  const nominalGdpRate = (country.gdpGrowthPct + 1.4) / 100;
+  const gdpFactor = Math.pow(1 + nominalGdpRate, deltaYears);
+
+  const populationMillions = Number((country.populationMillions * popFactor).toFixed(1));
+  const gdpTrillions = Number((country.gdpTrillions * gdpFactor).toFixed(2));
+  const gdpPerCapita = Math.round((gdpTrillions * 1_000_000) / Math.max(0.1, populationMillions));
+
+  // Estimate annual aging increment from country's 2025->2030 gdpHistory slope
+  const h2025 = country.gdpHistory.find((p) => p.year === 2025);
+  const h2030 = country.gdpHistory.find((p) => p.year === 2030);
+  const annualAgingStep =
+    h2025 && h2030 ? (h2030.medianAge - h2025.medianAge) / 5 : 0.22;
+
+  const medianAge = Number(
+    Math.max(16, Math.min(58, country.medianAge + deltaYears * annualAgingStep)).toFixed(1)
+  );
+  const urbanizationPct = Number(
+    Math.max(15, Math.min(100, country.urbanizationPct + deltaYears * 0.25)).toFixed(1)
+  );
+  const lifeExpectancy = Number(
+    Math.max(50, Math.min(90, country.lifeExpectancy + deltaYears * 0.12)).toFixed(1)
+  );
+
+  // Subtle shift in youth (0-14) vs senior (65+) brackets for the chosen year
+  const bracketShift = deltaYears * (annualAgingStep * 0.45);
+  const ageBrackets: AgeBracket[] = country.ageBrackets.map((b) => {
+    if (b.group === '0-14') {
+      const m = Math.max(2, Number((b.malePct - bracketShift * 0.51).toFixed(2)));
+      const f = Math.max(2, Number((b.femalePct - bracketShift * 0.49).toFixed(2)));
+      return { ...b, malePct: m, femalePct: f };
+    }
+    if (b.group === '65+') {
+      const m = Math.max(1, Number((b.malePct + bracketShift * 0.45).toFixed(2)));
+      const f = Math.max(1, Number((b.femalePct + bracketShift * 0.55).toFixed(2)));
+      return { ...b, malePct: m, femalePct: f };
+    }
+    return b;
+  });
+
+  return {
+    ...country,
+    populationMillions,
+    gdpTrillions,
+    gdpPerCapita,
+    medianAge,
+    urbanizationPct,
+    lifeExpectancy,
+    ageBrackets,
+  };
 }
 
-export function computeProjectedGdpGrowth10YrPct(country: CountryRecord): number {
+export function projectCountriesForYear(
+  countries: CountryRecord[],
+  year: DataYear = DEFAULT_DATA_YEAR
+): CountryRecord[] {
+  return countries.map((c) => projectCountryForYear(c, year));
+}
+
+/**
+ * Projects a city's 2025 baseline metrics to the selected reporting year (2024, 2025, or 2026).
+ */
+export function projectCityForYear(
+  city: CityRecord,
+  year: DataYear = DEFAULT_DATA_YEAR
+): CityRecord {
+  const deltaYears = year - 2025;
+  if (deltaYears === 0) return city;
+
+  const popFactor = Math.pow(1 + city.annualPopGrowthPct / 100, deltaYears);
+  // Metropolitan GDP generally outpaces national growth slightly; approximate from growth profile
+  const cityNominalGdpRate = Math.max(0.015, city.annualPopGrowthPct / 100 + 0.032);
+  const gdpFactor = Math.pow(1 + cityNominalGdpRate, deltaYears);
+
+  const population = Math.round(city.population * popFactor);
+  const metroPopulation = Math.round(city.metroPopulation * popFactor);
+  const densityPerKm2 = Math.round(city.densityPerKm2 * popFactor);
+  const gdpBillions = Math.max(1, Math.round(city.gdpBillions * gdpFactor));
+  const gdpPerCapita = Math.round((city.gdpPerCapita * gdpFactor) / popFactor);
+  const medianAge = Number(
+    Math.max(18, Math.min(56, city.medianAge + deltaYears * 0.22)).toFixed(1)
+  );
+
+  return {
+    ...city,
+    population,
+    metroPopulation,
+    densityPerKm2,
+    gdpBillions,
+    gdpPerCapita,
+    medianAge,
+  };
+}
+
+export function projectCitiesForYear(
+  cities: CityRecord[],
+  year: DataYear = DEFAULT_DATA_YEAR
+): CityRecord[] {
+  return cities.map((c) => projectCityForYear(c, year));
+}
+
+export function computeProjectedChange2050Pct(country: CountryRecord): number {
+  const basePop = country.populationMillions;
+  const p2050 = country.projections.find((p) => p.year === 2050)?.medium ?? basePop;
+  if (basePop <= 0) return 0;
+  return Number((((p2050 - basePop) / basePop) * 100).toFixed(1));
+}
+
+export function computeProjectedGdpGrowth10YrPct(
+  country: CountryRecord,
+  startYear: DataYear = 2025
+): number {
   const gdp2025 = country.gdpHistory.find((p) => p.year === 2025)?.gdpTrillions ?? country.gdpTrillions;
   const gdp2035 = country.gdpHistory.find((p) => p.year === 2035)?.gdpTrillions;
+  const gdp2040 = country.gdpHistory.find((p) => p.year === 2040)?.gdpTrillions;
   if (gdp2025 <= 0) return 0;
-  if (gdp2035 !== undefined) {
+
+  if (startYear === 2025 && gdp2035 !== undefined) {
+    return Number((((gdp2035 - gdp2025) / gdp2025) * 100).toFixed(1));
+  }
+
+  // Use trajectory start and end (+10 yrs) so chart and table align exactly
+  const series = computeProjectedGdpTrajectory10Yr(country, startYear);
+  if (series.length >= 2) {
+    return series[series.length - 1].cumulativeGrowthPct;
+  }
+
+  if (gdp2040 !== undefined && gdp2035 !== undefined) {
     return Number((((gdp2035 - gdp2025) / gdp2025) * 100).toFixed(1));
   }
   return Number(((Math.pow(1 + country.gdpGrowthPct / 100, 10) - 1) * 100).toFixed(1));
@@ -102,12 +234,12 @@ export interface GdpTrajectoryPoint10Yr {
 }
 
 /**
- * Generates an annual 10-year projected GDP trajectory (2025–2035) anchored
- * to the country's 2025, 2030, and 2035 nominal GDP checkpoints so the 2035
- * cumulative growth aligns exactly with computeProjectedGdpGrowth10YrPct.
+ * Generates an annual 10-year projected GDP trajectory (startYear .. startYear + 10)
+ * anchored to the country's 2025, 2030, 2035, and 2040 nominal GDP checkpoints.
  */
 export function computeProjectedGdpTrajectory10Yr(
-  country: CountryRecord
+  country: CountryRecord,
+  startYear: DataYear = 2025
 ): GdpTrajectoryPoint10Yr[] {
   const gdp2025 =
     country.gdpHistory.find((p) => p.year === 2025)?.gdpTrillions ??
@@ -121,26 +253,35 @@ export function computeProjectedGdpTrajectory10Yr(
   const gdp2035 =
     country.gdpHistory.find((p) => p.year === 2035)?.gdpTrillions ??
     gdp2025 * Math.pow(1 + fallbackRate, 10);
+  const gdp2040 =
+    country.gdpHistory.find((p) => p.year === 2040)?.gdpTrillions ??
+    gdp2035 * Math.pow(gdp2035 / gdp2030, 1);
 
   const cagrFirst5 = Math.pow(gdp2030 / gdp2025, 1 / 5) - 1;
   const cagrSecond5 = Math.pow(gdp2035 / gdp2030, 1 / 5) - 1;
+  const cagrThird5 = Math.pow(gdp2040 / gdp2035, 1 / 5) - 1;
 
-  const points: GdpTrajectoryPoint10Yr[] = [];
-  for (let year = 2025; year <= 2035; year += 1) {
-    let rawGdp: number;
-    let annualRate: number;
-    if (year === 2025) {
-      rawGdp = gdp2025;
-      annualRate = country.gdpGrowthPct / 100;
-    } else if (year <= 2030) {
-      rawGdp = gdp2025 * Math.pow(1 + cagrFirst5, year - 2025);
-      annualRate = cagrFirst5;
-    } else {
-      rawGdp = gdp2030 * Math.pow(1 + cagrSecond5, year - 2030);
-      annualRate = cagrSecond5;
+  const evalGdpAt = (yr: number): { gdp: number; rate: number } => {
+    if (yr < 2025) {
+      return { gdp: gdp2025 * Math.pow(1 + cagrFirst5, yr - 2025), rate: cagrFirst5 };
     }
+    if (yr === 2025) {
+      return { gdp: gdp2025, rate: country.gdpGrowthPct / 100 };
+    }
+    if (yr <= 2030) {
+      return { gdp: gdp2025 * Math.pow(1 + cagrFirst5, yr - 2025), rate: cagrFirst5 };
+    }
+    if (yr <= 2035) {
+      return { gdp: gdp2030 * Math.pow(1 + cagrSecond5, yr - 2030), rate: cagrSecond5 };
+    }
+    return { gdp: gdp2035 * Math.pow(1 + cagrThird5, yr - 2035), rate: cagrThird5 };
+  };
 
-    const cumulativeGrowthPct = Number((((rawGdp - gdp2025) / gdp2025) * 100).toFixed(1));
+  const baseGdp = evalGdpAt(startYear).gdp;
+  const points: GdpTrajectoryPoint10Yr[] = [];
+  for (let year = startYear; year <= startYear + 10; year += 1) {
+    const { gdp: rawGdp, rate: annualRate } = evalGdpAt(year);
+    const cumulativeGrowthPct = Number((((rawGdp - baseGdp) / baseGdp) * 100).toFixed(1));
     points.push({
       year,
       gdpTrillions: Number(rawGdp.toFixed(2)),
@@ -150,6 +291,36 @@ export function computeProjectedGdpTrajectory10Yr(
   }
 
   return points;
+}
+
+export function sortCountries(
+  countries: CountryRecord[],
+  sortBy: CountrySortKey,
+  sortDir: 'asc' | 'desc',
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): CountryRecord[] {
+  const dir = sortDir === 'asc' ? 1 : -1;
+  return [...countries].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name) * dir;
+    if (sortBy === 'region') {
+      const regCmp = a.region.localeCompare(b.region);
+      return (regCmp !== 0 ? regCmp : a.name.localeCompare(b.name)) * dir;
+    }
+    if (sortBy === 'workingAgeShare') {
+      return (computeWorkingAgeShare(a.ageBrackets) - computeWorkingAgeShare(b.ageBrackets)) * dir;
+    }
+    if (sortBy === 'projectedGdp10Yr') {
+      return (
+        (computeProjectedGdpGrowth10YrPct(a, dataYear) -
+          computeProjectedGdpGrowth10YrPct(b, dataYear)) *
+        dir
+      );
+    }
+    if (sortBy === 'projectedChange2050') {
+      return (computeProjectedChange2050Pct(a) - computeProjectedChange2050Pct(b)) * dir;
+    }
+    return (a[sortBy] - b[sortBy]) * dir;
+  });
 }
 
 export function computePearsonCorrelation(
@@ -438,8 +609,12 @@ export function rowsToCsv(headers: string[], rows: Array<Array<string | number>>
   return lines.join('\n');
 }
 
-export function buildCountriesCsv(countries: CountryRecord[]): string {
+export function buildCountriesCsv(
+  countries: CountryRecord[],
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
   const headers = [
+    'Data Year',
     'Code',
     'Country',
     'Region',
@@ -462,6 +637,7 @@ export function buildCountriesCsv(countries: CountryRecord[]): string {
   const rows = countries.map((c) => {
     const p2050 = c.projections.find((p) => p.year === 2050)?.medium ?? c.populationMillions;
     return [
+      dataYear,
       c.code,
       c.name,
       c.region,
@@ -470,7 +646,7 @@ export function buildCountriesCsv(countries: CountryRecord[]): string {
       c.gdpTrillions,
       c.gdpPerCapita,
       c.gdpGrowthPct,
-      computeProjectedGdpGrowth10YrPct(c),
+      computeProjectedGdpGrowth10YrPct(c, dataYear),
       c.medianAge,
       computeWorkingAgeShare(c.ageBrackets),
       computeDependencyRatio(c.ageBrackets),
@@ -478,15 +654,19 @@ export function buildCountriesCsv(countries: CountryRecord[]): string {
       c.lifeExpectancy,
       c.urbanizationPct,
       p2050,
-      getCountrySourceCitation(c.code),
+      getCountrySourceCitation(c.code, dataYear),
     ];
   });
 
   return rowsToCsv(headers, rows);
 }
 
-export function buildCitiesCsv(cities: CityRecord[]): string {
+export function buildCitiesCsv(
+  cities: CityRecord[],
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
   const headers = [
+    'Data Year',
     'City',
     'Country',
     'Region',
@@ -509,6 +689,7 @@ export function buildCitiesCsv(cities: CityRecord[]): string {
   ];
 
   const rows = cities.map((c) => [
+    dataYear,
     c.name,
     c.countryName,
     c.region,
@@ -527,7 +708,7 @@ export function buildCitiesCsv(cities: CityRecord[]): string {
     c.projected2035,
     c.projected2050,
     c.primarySector,
-    getCitySourceCitation(c.countryCode),
+    getCitySourceCitation(c.countryCode, dataYear),
   ]);
 
   return rowsToCsv(headers, rows);
@@ -535,7 +716,8 @@ export function buildCitiesCsv(cities: CityRecord[]): string {
 
 export function buildComparisonCsv(
   selectedCities: CityRecord[],
-  countryByCode: Map<string, CountryRecord>
+  countryByCode: Map<string, CountryRecord>,
+  dataYear: DataYear = DEFAULT_DATA_YEAR
 ): string {
   const matrix = computeCityComparisonMatrix(selectedCities, countryByCode);
   const headers = ['Metric', 'Unit', ...selectedCities.map((c) => `${c.name} (${c.countryCode})`)];
@@ -555,14 +737,12 @@ export function buildComparisonCsv(
     [
       'Official Data Year',
       'year',
-      ...selectedCities.map(
-        (c) => NATIONAL_OFFICE_BY_COUNTRY[c.countryCode]?.cityDataYear ?? '2024'
-      ),
+      ...selectedCities.map((c) => formatCityDataYear(c.countryCode, dataYear)),
     ],
     [
       'Data Source Footprint',
       'sources',
-      ...selectedCities.map((c) => getCitySourceCitation(c.countryCode)),
+      ...selectedCities.map((c) => getCitySourceCitation(c.countryCode, dataYear)),
     ],
   ];
   return rowsToCsv(headers, rows);

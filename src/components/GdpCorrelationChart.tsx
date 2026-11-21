@@ -16,6 +16,7 @@ import type {
   CorrelationXAxis,
   CorrelationYAxis,
   CountryRecord,
+  DataYear,
   Region,
 } from '../types/worldStats';
 import {
@@ -27,6 +28,7 @@ import { SourceFootnote } from './SourceFootnote';
 
 interface GdpCorrelationChartProps {
   countries: CountryRecord[];
+  dataYear: DataYear;
   selectedCountryCode: string;
   onSelectCountry: (countryCode: string) => void;
   onOpenSources: () => void;
@@ -59,6 +61,7 @@ interface ScatterDatum {
 
 export function GdpCorrelationChart({
   countries,
+  dataYear,
   selectedCountryCode,
   onSelectCountry,
   onOpenSources,
@@ -117,26 +120,26 @@ export function GdpCorrelationChart({
   return (
     <section
       aria-label="GDP and demographic correlation explorer"
-      className="bg-[#111827] border border-slate-800/90 rounded-lg"
+      className="ws-panel overflow-hidden"
     >
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-4 border-b border-slate-800/80">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-4 border-b ws-border">
         <div>
-          <h2 className="text-base font-semibold text-slate-100">
-            GDP &amp; Demographic Correlation Analysis
+          <h2 className="text-base font-semibold ws-text">
+            GDP &amp; Demographic Correlation Analysis ({dataYear})
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs ws-text-muted mt-0.5">
             Bubble area scales with national population · Click any country node to open its full breakdown
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+          <label className="flex items-center gap-1.5 text-xs ws-text-muted">
             <span>X-Axis</span>
             <select
               aria-label="Correlation X-axis metric"
               value={xAxisKey}
               onChange={(e) => setXAxisKey(e.target.value as CorrelationXAxis)}
-              className="bg-[#0B111D] border border-slate-700/90 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
+              className="ws-input px-2.5 py-1.5 text-xs focus:outline-none"
             >
               {Object.entries(X_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>
@@ -146,13 +149,13 @@ export function GdpCorrelationChart({
             </select>
           </label>
 
-          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+          <label className="flex items-center gap-1.5 text-xs ws-text-muted">
             <span>Y-Axis</span>
             <select
               aria-label="Correlation Y-axis metric"
               value={yAxisKey}
               onChange={(e) => setYAxisKey(e.target.value as CorrelationYAxis)}
-              className="bg-[#0B111D] border border-slate-700/90 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
+              className="ws-input px-2.5 py-1.5 text-xs focus:outline-none"
             >
               {Object.entries(Y_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>
@@ -162,13 +165,13 @@ export function GdpCorrelationChart({
             </select>
           </label>
 
-          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+          <label className="flex items-center gap-1.5 text-xs ws-text-muted">
             <span>Region</span>
             <select
               aria-label="Filter correlation chart by region"
               value={regionFilter}
               onChange={(e) => setRegionFilter(e.target.value as Region | 'All')}
-              className="bg-[#0B111D] border border-slate-700/90 rounded-md px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
+              className="ws-input px-2.5 py-1.5 text-xs focus:outline-none"
             >
               <option value="All">All Regions</option>
               {REGIONS.map((r) => (
@@ -182,27 +185,27 @@ export function GdpCorrelationChart({
       </div>
 
       {/* Regression stats strip */}
-      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-2.5 bg-[#0D1422] border-b border-slate-800/70 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-2.5 ws-subpanel border-b ws-border text-xs">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="text-slate-400">
+          <span className="ws-text-muted">
             Pearson r:{' '}
-            <strong className="font-mono tabular-nums text-sky-300">
+            <strong className="font-mono tabular-nums ws-accent">
               {regression.r >= 0 ? '+' : ''}
               {regression.r.toFixed(3)}
             </strong>
           </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="text-slate-400">
+          <span className="ws-text-muted" aria-hidden="true">·</span>
+          <span className="ws-text-muted">
             R²:{' '}
-            <strong className="font-mono tabular-nums text-slate-200">
+            <strong className="font-mono tabular-nums ws-text">
               {regression.rSquared.toFixed(3)}
             </strong>
           </span>
-          <span className="text-slate-600" aria-hidden="true">·</span>
-          <span className="text-slate-300">{regression.interpretation}</span>
+          <span className="ws-text-muted" aria-hidden="true">·</span>
+          <span className="ws-text-2">{regression.interpretation}</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] ws-text-muted">
           {REGIONS.map((r) => (
             <span key={r} className="inline-flex items-center gap-1.5">
               <span
@@ -219,19 +222,19 @@ export function GdpCorrelationChart({
       <div className="p-4 h-[340px]">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 14, right: 24, bottom: 20, left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" />
             <XAxis
               type="number"
               dataKey="x"
               name={X_LABELS[xAxisKey]}
               domain={['auto', 'auto']}
-              tick={{ fill: '#94A3B8', fontSize: 11 }}
-              stroke="#334155"
+              tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+              stroke="var(--ws-chart-axis)"
               label={{
                 value: X_LABELS[xAxisKey],
                 position: 'insideBottom',
                 offset: -12,
-                fill: '#94A3B8',
+                fill: 'var(--ws-chart-tick)',
                 fontSize: 11,
               }}
             />
@@ -240,42 +243,42 @@ export function GdpCorrelationChart({
               dataKey="y"
               name={Y_LABELS[yAxisKey]}
               tickFormatter={formatY}
-              tick={{ fill: '#94A3B8', fontSize: 11 }}
-              stroke="#334155"
+              tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+              stroke="var(--ws-chart-axis)"
               width={64}
             />
             <ZAxis type="number" dataKey="populationMillions" range={[70, 560]} name="Population" />
             {trendSegment && (
               <ReferenceLine
                 segment={trendSegment}
-                stroke="#64748B"
+                stroke="var(--ws-chart-tick)"
                 strokeDasharray="5 5"
                 strokeWidth={1.5}
               />
             )}
             <Tooltip
-              cursor={{ strokeDasharray: '3 3', stroke: '#475569' }}
+              cursor={{ strokeDasharray: '3 3', stroke: 'var(--ws-chart-tick)' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const d = payload[0].payload as ScatterDatum;
                 return (
-                  <div className="bg-[#0B111D] border border-slate-700 rounded-md px-3 py-2 text-xs shadow-xl">
-                    <p className="font-semibold text-slate-100">
-                      {d.name} <span className="font-normal text-slate-400">· {d.region}</span>
+                  <div className="ws-popover px-3 py-2 text-xs">
+                    <p className="font-semibold ws-text">
+                      {d.name} <span className="font-normal ws-text-muted">· {d.region}</span>
                     </p>
-                    <div className="mt-1.5 space-y-0.5 font-mono tabular-nums text-slate-300">
+                    <div className="mt-1.5 space-y-0.5 font-mono tabular-nums ws-text-2">
                       <p>
-                        {X_LABELS[xAxisKey]}: <span className="text-sky-300">{d.x}</span>
+                        {X_LABELS[xAxisKey]}: <span className="ws-accent">{d.x}</span>
                       </p>
                       <p>
                         GDP / Capita:{' '}
-                        <span className="text-emerald-400">{formatCurrency(d.gdpPerCapita)}</span>
+                        <span className="ws-positive">{formatCurrency(d.gdpPerCapita)}</span>
                       </p>
                       <p>
-                        Total GDP: <span className="text-slate-100">${d.gdpTrillions.toFixed(2)}T</span>
+                        Total GDP ({dataYear}): <span className="ws-text">${d.gdpTrillions.toFixed(2)}T</span>
                       </p>
                       <p>
-                        Population: <span className="text-slate-200">{d.populationMillions.toFixed(1)}M</span>
+                        Population: <span className="ws-text-2">{d.populationMillions.toFixed(1)}M</span>
                       </p>
                     </div>
                   </div>
@@ -296,8 +299,8 @@ export function GdpCorrelationChart({
                   <Cell
                     key={entry.code}
                     fill={REGION_COLORS[entry.region]}
-                    fillOpacity={isSelected ? 1 : 0.78}
-                    stroke={isSelected ? '#F8FAFC' : '#0B111D'}
+                    fillOpacity={isSelected ? 1 : 0.82}
+                    stroke={isSelected ? 'var(--ws-map-selected-stroke)' : 'var(--ws-map-stroke)'}
                     strokeWidth={isSelected ? 2.2 : 1}
                   />
                 );
@@ -308,8 +311,8 @@ export function GdpCorrelationChart({
       </div>
 
       <SourceFootnote
-        sourceText="IMF World Economic Outlook · UN DESA WPP 2024 · World Bank WDI (Client-side Pearson OLS)"
-        vintage="2024–2025 Cross-Section"
+        sourceText={`IMF World Economic Outlook (${dataYear}) · UN DESA WPP (${dataYear}) · World Bank WDI (Client-side Pearson OLS)`}
+        vintage={`${dataYear} Cross-Section`}
         onOpenSources={onOpenSources}
       />
     </section>

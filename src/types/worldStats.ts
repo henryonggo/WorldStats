@@ -114,3 +114,20 @@ export interface RegressionResult {
   intercept: number;
   interpretation: string;
 }
+
+export type DataYear = 2024 | 2025 | 2026;
+
+export const AVAILABLE_DATA_YEARS: DataYear[] = [2026, 2025, 2024];
+export const DEFAULT_DATA_YEAR: DataYear = 2026;
+
+export type CountrySortKey =
+  | 'name'
+  | 'region'
+  | 'populationMillions'
+  | 'medianAge'
+  | 'workingAgeShare'
+  | 'gdpTrillions'
+  | 'gdpPerCapita'
+  | 'projectedGdp10Yr'
+  | 'projectedChange2050';
+

@@ -4,7 +4,7 @@ import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import worldAtlasData from 'world-atlas/countries-110m.json';
 import { Minus, Plus, RotateCcw, MapPin } from 'lucide-react';
-import type { CityRecord, CountryRecord, MapMetricKey } from '../types/worldStats';
+import type { CityRecord, CountryRecord, DataYear, MapMetricKey } from '../types/worldStats';
 import {
   computeProjectedChange2050Pct,
   formatCompactNumber,
@@ -16,6 +16,7 @@ import { SourceFootnote } from './SourceFootnote';
 interface WorldChoroplethMapProps {
   countries: CountryRecord[];
   cities: CityRecord[];
+  dataYear: DataYear;
   selectedCountryCode: string;
   onSelectCountry: (countryCode: string) => void;
   onSelectCity: (city: CityRecord) => void;
@@ -28,8 +29,8 @@ const METRIC_OPTIONS: Array<{
   legendLow: string;
   legendHigh: string;
 }> = [
-  { key: 'populationMillions', label: 'Population', legendLow: '5M', legendHigh: '1.45B' },
-  { key: 'gdpPerCapita', label: 'GDP / Capita', legendLow: '$1.6K', legendHigh: '$90K' },
+  { key: 'populationMillions', label: 'Population', legendLow: '5M', legendHigh: '1.47B' },
+  { key: 'gdpPerCapita', label: 'GDP / Capita', legendLow: '$1.6K', legendHigh: '$94K' },
   { key: 'medianAge', label: 'Median Age', legendLow: '18 yrs', legendHigh: '50 yrs' },
   { key: 'projectedChange2050', label: '2050 Growth', legendLow: '-16%', legendHigh: '+54%' },
 ];
@@ -42,15 +43,14 @@ function interpolateColor(metric: MapMetricKey, country: CountryRecord): string 
   }
   if (metric === 'gdpPerCapita') {
     const t = Math.min(1, country.gdpPerCapita / 85000);
-    const palette = ['#172B3A', '#1A4B5C', '#117A7F', '#10B981', '#34D399'];
+    const palette = ['#1E3A52', '#1C5B6E', '#117A7F', '#0D9488', '#10B981'];
     return palette[Math.min(palette.length - 1, Math.floor(t * palette.length))];
   }
   if (metric === 'medianAge') {
     const t = Math.max(0, Math.min(1, (country.medianAge - 18) / 32));
-    const palette = ['#3B2618', '#6B3D1A', '#A15B1B', '#D97706', '#F59E0B'];
+    const palette = ['#4A2E1B', '#7A451B', '#B45D18', '#D97706', '#F59E0B'];
     return palette[Math.min(palette.length - 1, Math.floor(t * palette.length))];
   }
-  // projectedChange2050
   const change = computeProjectedChange2050Pct(country);
   if (change <= -10) return '#BE123C';
   if (change < 0) return '#E11D48';
@@ -65,6 +65,7 @@ const HEIGHT = 430;
 export function WorldChoroplethMap({
   countries,
   cities,
+  dataYear,
   selectedCountryCode,
   onSelectCountry,
   onSelectCity,
@@ -90,7 +91,7 @@ export function WorldChoroplethMap({
       countries: GeometryCollection;
     }>;
     const geo = feature(topology, topology.objects.countries);
-    const filteredFeatures = geo.features.filter((f) => String(f.id) !== '010'); // exclude Antarctica
+    const filteredFeatures = geo.features.filter((f) => String(f.id) !== '010');
     const proj = geoNaturalEarth1().fitExtent(
       [
         [18, 16],
@@ -114,15 +115,15 @@ export function WorldChoroplethMap({
   return (
     <section
       aria-label="Interactive global choropleth map"
-      className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden"
+      className="ws-panel overflow-hidden"
     >
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-5 py-4 border-b border-slate-800/80">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-5 py-4 border-b ws-border">
         <div>
-          <h2 className="text-base font-semibold text-slate-100">
-            Interactive Global Choropleth &amp; City Distribution
+          <h2 className="text-base font-semibold ws-text">
+            Interactive Global Choropleth &amp; City Distribution ({dataYear})
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs ws-text-muted mt-0.5">
             Click any highlighted country to inspect full age pyramid &amp; GDP trends, or select a city node.
           </p>
         </div>
@@ -131,17 +132,17 @@ export function WorldChoroplethMap({
           <div
             role="group"
             aria-label="Map metric selector"
-            className="grid grid-cols-2 sm:inline-flex items-center gap-0.5 p-0.5 bg-[#0B111D] border border-slate-800 rounded-md w-full sm:w-auto"
+            className="grid grid-cols-2 sm:inline-flex items-center gap-0.5 p-0.5 ws-inset w-full sm:w-auto"
           >
             {METRIC_OPTIONS.map((opt) => (
               <button
                 key={opt.key}
                 type="button"
                 onClick={() => setMetric(opt.key)}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 text-center cursor-pointer ${
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 text-center cursor-pointer ${
                   metric === opt.key
-                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    ? 'ws-nav-active'
+                    : 'ws-text-muted hover:ws-text border border-transparent ws-radius-sm'
                 }`}
               >
                 {opt.label}
@@ -153,10 +154,8 @@ export function WorldChoroplethMap({
             type="button"
             onClick={() => setShowCities((prev) => !prev)}
             aria-pressed={showCities}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              showCities
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                : 'bg-[#0B111D] text-slate-400 border-slate-800 hover:text-slate-200'
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              showCities ? 'ws-nav-active' : 'ws-btn-subtle'
             }`}
           >
             <MapPin className="w-3.5 h-3.5" />
@@ -166,14 +165,14 @@ export function WorldChoroplethMap({
       </div>
 
       {/* Map Viewport */}
-      <div className="relative bg-[#0B111D] overflow-hidden" data-testid="world-map-container">
+      <div className="relative ws-subpanel overflow-hidden" data-testid="world-map-container">
         {/* Zoom toolbar */}
-        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1 bg-[#111827]/95 border border-slate-800 rounded-md p-1">
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1 ws-popover p-1">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(2.4, Number((z + 0.35).toFixed(2))))}
             aria-label="Zoom in map"
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+            className="p-1.5 ws-text-2 ws-row-hover ws-radius-sm transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -181,7 +180,7 @@ export function WorldChoroplethMap({
             type="button"
             onClick={() => setZoom((z) => Math.max(1, Number((z - 0.35).toFixed(2))))}
             aria-label="Zoom out map"
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+            className="p-1.5 ws-text-2 ws-row-hover ws-radius-sm transition-colors cursor-pointer"
           >
             <Minus className="w-3.5 h-3.5" />
           </button>
@@ -189,7 +188,7 @@ export function WorldChoroplethMap({
             type="button"
             onClick={() => setZoom(1)}
             aria-label="Reset map zoom"
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+            className="p-1.5 ws-text-2 ws-row-hover ws-radius-sm transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -197,49 +196,49 @@ export function WorldChoroplethMap({
 
         {/* Floating info panel on hover */}
         {(hoveredCity || hoveredCountry) && (
-          <div className="absolute top-3 left-3 z-10 pointer-events-none max-w-xs bg-[#111827]/95 border border-slate-700/90 rounded-md px-3.5 py-2.5 shadow-lg">
+          <div className="absolute top-3 left-3 z-10 pointer-events-none max-w-xs ws-popover px-3.5 py-2.5">
             {hoveredCity ? (
               <div>
-                <p className="text-sm font-semibold text-slate-100">
+                <p className="text-sm font-semibold ws-text">
                   {hoveredCity.name}{' '}
-                  <span className="text-xs font-normal text-slate-400">· {hoveredCity.countryName}</span>
+                  <span className="text-xs font-normal ws-text-muted">· {hoveredCity.countryName}</span>
                 </p>
                 <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  <span className="text-slate-400">Population</span>
-                  <span className="font-mono tabular-nums text-right text-slate-200">
+                  <span className="ws-text-muted">Population ({dataYear})</span>
+                  <span className="font-mono tabular-nums text-right ws-text-2">
                     {formatCompactNumber(hoveredCity.population)}
                   </span>
-                  <span className="text-slate-400">City GDP</span>
-                  <span className="font-mono tabular-nums text-right text-emerald-400">
+                  <span className="ws-text-muted">City GDP</span>
+                  <span className="font-mono tabular-nums text-right ws-positive">
                     ${hoveredCity.gdpBillions}B
                   </span>
-                  <span className="text-slate-400">Median Age</span>
-                  <span className="font-mono tabular-nums text-right text-amber-300">
+                  <span className="ws-text-muted">Median Age</span>
+                  <span className="font-mono tabular-nums text-right ws-warm">
                     {hoveredCity.medianAge.toFixed(1)} yrs
                   </span>
-                  <span className="text-slate-400">2050 Proj</span>
-                  <span className="font-mono tabular-nums text-right text-sky-300">
+                  <span className="ws-text-muted">2050 Proj</span>
+                  <span className="font-mono tabular-nums text-right ws-accent">
                     {formatCompactNumber(hoveredCity.projected2050)}
                   </span>
                 </div>
               </div>
             ) : hoveredCountry ? (
               <div>
-                <p className="text-sm font-semibold text-slate-100">
+                <p className="text-sm font-semibold ws-text">
                   {hoveredCountry.name}{' '}
-                  <span className="text-xs font-normal text-slate-400">· {hoveredCountry.region}</span>
+                  <span className="text-xs font-normal ws-text-muted">· {hoveredCountry.region}</span>
                 </p>
                 <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  <span className="text-slate-400">{activeMetricSpec.label}</span>
-                  <span className="font-mono tabular-nums text-right text-sky-300 font-medium">
+                  <span className="ws-text-muted">{activeMetricSpec.label}</span>
+                  <span className="font-mono tabular-nums text-right ws-accent font-medium">
                     {formatCountryMetricValue(hoveredCountry)}
                   </span>
-                  <span className="text-slate-400">GDP Total</span>
-                  <span className="font-mono tabular-nums text-right text-slate-200">
+                  <span className="ws-text-muted">GDP Total ({dataYear})</span>
+                  <span className="font-mono tabular-nums text-right ws-text-2">
                     ${hoveredCountry.gdpTrillions.toFixed(2)}T
                   </span>
-                  <span className="text-slate-400">Median Age</span>
-                  <span className="font-mono tabular-nums text-right text-slate-200">
+                  <span className="ws-text-muted">Median Age</span>
+                  <span className="font-mono tabular-nums text-right ws-text-2">
                     {hoveredCountry.medianAge.toFixed(1)} yrs
                   </span>
                 </div>
@@ -259,7 +258,15 @@ export function WorldChoroplethMap({
             style={{ transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
             {/* Subtle graticule horizon */}
-            <line x1={20} y1={HEIGHT / 2} x2={WIDTH - 20} y2={HEIGHT / 2} stroke="#1E293B" strokeDasharray="3 4" strokeWidth={0.7} />
+            <line
+              x1={20}
+              y1={HEIGHT / 2}
+              x2={WIDTH - 20}
+              y2={HEIGHT / 2}
+              stroke="var(--ws-grid-stroke)"
+              strokeDasharray="3 4"
+              strokeWidth={0.8}
+            />
 
             {/* Country polygons */}
             {features.map((feat, i) => {
@@ -270,16 +277,22 @@ export function WorldChoroplethMap({
 
               const isSelected = Boolean(matched && matched.code === selectedCountryCode);
               const isHovered = Boolean(matched && hoveredCountry && matched.code === hoveredCountry.code);
-              const fill = matched ? interpolateColor(metric, matched) : '#162032';
+              const fill = matched ? interpolateColor(metric, matched) : 'var(--ws-map-untracked)';
 
               return (
                 <path
                   key={`${idStr}-${i}`}
                   d={d}
                   fill={fill}
-                  fillOpacity={matched ? (isHovered || isSelected ? 1 : 0.9) : 0.7}
-                  stroke={isSelected ? '#F8FAFC' : isHovered ? '#38BDF8' : matched ? '#0B111D' : '#1E293B'}
-                  strokeWidth={isSelected ? 1.5 / zoom : isHovered ? 1.25 / zoom : 0.6 / zoom}
+                  fillOpacity={matched ? (isHovered || isSelected ? 1 : 0.92) : 0.85}
+                  stroke={
+                    isSelected
+                      ? 'var(--ws-map-selected-stroke)'
+                      : isHovered
+                        ? 'var(--ws-accent)'
+                        : 'var(--ws-map-stroke)'
+                  }
+                  strokeWidth={isSelected ? 1.6 / zoom : isHovered ? 1.3 / zoom : 0.65 / zoom}
                   className={matched ? 'cursor-pointer transition-opacity duration-150' : ''}
                   onMouseEnter={() => {
                     if (matched) setHoveredCountry(matched);
@@ -306,8 +319,8 @@ export function WorldChoroplethMap({
                     cy={coords[1]}
                     r={isCityHovered ? radius * 1.45 : radius}
                     fill="#F59E0B"
-                    fillOpacity={isCityHovered ? 1 : 0.85}
-                    stroke="#090E17"
+                    fillOpacity={isCityHovered ? 1 : 0.9}
+                    stroke="var(--ws-map-stroke)"
                     strokeWidth={0.9 / Math.sqrt(zoom)}
                     className="cursor-pointer"
                     onMouseEnter={() => setHoveredCity(city)}
@@ -324,10 +337,10 @@ export function WorldChoroplethMap({
       </div>
 
       {/* Legend Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 border-t border-slate-800/80 text-xs text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 border-t ws-border text-xs ws-text-muted">
         <div className="flex items-center gap-3">
           <span>Scale ({activeMetricSpec.label}):</span>
-          <span className="font-mono tabular-nums text-slate-300">{activeMetricSpec.legendLow}</span>
+          <span className="font-mono tabular-nums ws-text-2">{activeMetricSpec.legendLow}</span>
           <div className="flex items-center gap-0.5" aria-hidden="true">
             {metric === 'populationMillions' && (
               <>
@@ -340,18 +353,18 @@ export function WorldChoroplethMap({
             )}
             {metric === 'gdpPerCapita' && (
               <>
-                <span className="w-5 h-2 rounded-xs bg-[#172B3A]" />
-                <span className="w-5 h-2 rounded-xs bg-[#1A4B5C]" />
+                <span className="w-5 h-2 rounded-xs bg-[#1E3A52]" />
+                <span className="w-5 h-2 rounded-xs bg-[#1C5B6E]" />
                 <span className="w-5 h-2 rounded-xs bg-[#117A7F]" />
+                <span className="w-5 h-2 rounded-xs bg-[#0D9488]" />
                 <span className="w-5 h-2 rounded-xs bg-[#10B981]" />
-                <span className="w-5 h-2 rounded-xs bg-[#34D399]" />
               </>
             )}
             {metric === 'medianAge' && (
               <>
-                <span className="w-5 h-2 rounded-xs bg-[#3B2618]" />
-                <span className="w-5 h-2 rounded-xs bg-[#6B3D1A]" />
-                <span className="w-5 h-2 rounded-xs bg-[#A15B1B]" />
+                <span className="w-5 h-2 rounded-xs bg-[#4A2E1B]" />
+                <span className="w-5 h-2 rounded-xs bg-[#7A451B]" />
+                <span className="w-5 h-2 rounded-xs bg-[#B45D18]" />
                 <span className="w-5 h-2 rounded-xs bg-[#D97706]" />
                 <span className="w-5 h-2 rounded-xs bg-[#F59E0B]" />
               </>
@@ -366,10 +379,10 @@ export function WorldChoroplethMap({
               </>
             )}
           </div>
-          <span className="font-mono tabular-nums text-slate-300">{activeMetricSpec.legendHigh}</span>
+          <span className="font-mono tabular-nums ws-text-2">{activeMetricSpec.legendHigh}</span>
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-slate-400">
+        <div className="flex items-center gap-4 text-xs ws-text-muted">
           <span>24 Tracked Nations</span>
           <span aria-hidden="true">·</span>
           <span>Amber markers sized by Metro Population</span>
@@ -377,8 +390,8 @@ export function WorldChoroplethMap({
       </div>
 
       <SourceFootnote
-        sourceText="Natural Earth / World Atlas TopoJSON · UN DESA WPP 2024 · IMF WEO · National Statistical Offices"
-        vintage="2024–2025 Curated Baseline"
+        sourceText={`Natural Earth / World Atlas TopoJSON · UN DESA WPP (${dataYear}) · IMF WEO (${dataYear}) · National Statistical Offices`}
+        vintage={`${dataYear} Annual Series`}
         onOpenSources={onOpenSources}
       />
     </section>

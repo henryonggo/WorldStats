@@ -71,11 +71,9 @@ export function GlobalSearchBar({
     ];
   }, [displayedCountries, displayedCities]);
 
-  // Clamp active index when result count changes
   const clampedActiveIndex =
     flatItems.length === 0 ? -1 : Math.min(activeIndex, flatItems.length - 1);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -87,7 +85,6 @@ export function GlobalSearchBar({
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
 
-  // Global keyboard shortcuts: Cmd/Ctrl+K or "/"
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -186,15 +183,15 @@ export function GlobalSearchBar({
         id={listboxId}
         role="listbox"
         aria-label="Global country and city search results"
-        className="absolute left-0 right-0 top-full mt-2 bg-[#0D1422] border border-slate-700/90 rounded-lg shadow-2xl overflow-hidden z-50 max-h-[420px] flex flex-col"
+        className="absolute left-0 right-0 top-full mt-2 ws-popover overflow-hidden z-50 max-h-[420px] flex flex-col"
       >
-        <div className="overflow-y-auto divide-y divide-slate-800/80">
+        <div className="overflow-y-auto ws-divide">
           {!hasResults ? (
             <div className="px-4 py-8 text-center">
-              <p className="text-xs font-medium text-slate-200">
+              <p className="text-xs font-medium ws-text">
                 No countries or cities matching &ldquo;{trimmedQuery}&rdquo;
               </p>
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] ws-text-muted mt-1">
                 Try searching by country name, ISO code (e.g. IDN, CAN), city, or sector.
               </p>
               <button
@@ -205,7 +202,7 @@ export function GlobalSearchBar({
                   desktopInputRef.current?.focus();
                   mobileInputRef.current?.focus();
                 }}
-                className="mt-3 px-2.5 py-1 text-[11px] font-medium text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded transition-colors cursor-pointer"
+                className="mt-3 px-2.5 py-1 text-[11px] font-medium ws-nav-active transition-colors cursor-pointer"
               >
                 Clear search
               </button>
@@ -214,10 +211,10 @@ export function GlobalSearchBar({
             <>
               {displayedCountries.length > 0 && (
                 <div className="py-1.5">
-                  <div className="px-3 py-1 flex items-center justify-between text-[11px] font-medium text-slate-400">
+                  <div className="px-3 py-1 flex items-center justify-between text-[11px] font-medium ws-text-muted">
                     <span>{trimmedQuery ? 'Countries' : 'Quick Country Jump'}</span>
                     {trimmedQuery && (
-                      <span className="font-mono tabular-nums text-slate-500">
+                      <span className="font-mono tabular-nums ws-text-muted">
                         {displayedCountries.length} shown
                       </span>
                     )}
@@ -233,7 +230,7 @@ export function GlobalSearchBar({
                         aria-selected={isHighlighted}
                         onMouseEnter={() => setActiveIndex(flatIdx)}
                         className={`flex items-center justify-between gap-2 px-3 py-2 transition-colors ${
-                          isHighlighted ? 'bg-sky-500/15' : 'hover:bg-slate-800/50'
+                          isHighlighted ? 'ws-row-selected' : 'ws-row-hover'
                         }`}
                       >
                         <button
@@ -242,24 +239,24 @@ export function GlobalSearchBar({
                           className="flex-1 min-w-0 flex items-center justify-between gap-3 text-left cursor-pointer"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <Globe2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                            <Globe2 className="w-3.5 h-3.5 ws-accent shrink-0" />
                             <div className="min-w-0">
-                              <p className="text-xs font-medium text-slate-100 truncate">
+                              <p className="text-xs font-medium ws-text truncate">
                                 {country.name}{' '}
-                                <span className="font-mono text-[11px] text-slate-400">
+                                <span className="font-mono text-[11px] ws-text-muted">
                                   {country.code}
                                 </span>
                               </p>
-                              <p className="text-[11px] text-slate-400 truncate">
+                              <p className="text-[11px] ws-text-muted truncate">
                                 {country.region} · Median age {country.medianAge.toFixed(1)}y
                               </p>
                             </div>
                           </div>
                           <div className="text-right font-mono tabular-nums shrink-0">
-                            <p className="text-xs text-slate-200">
+                            <p className="text-xs ws-text-2">
                               {country.populationMillions.toFixed(1)}M
                             </p>
-                            <p className="text-[11px] text-emerald-400">
+                            <p className="text-[11px] ws-positive">
                               ${country.gdpTrillions.toFixed(2)}T
                             </p>
                           </div>
@@ -272,10 +269,10 @@ export function GlobalSearchBar({
 
               {displayedCities.length > 0 && (
                 <div className="py-1.5">
-                  <div className="px-3 py-1 flex items-center justify-between text-[11px] font-medium text-slate-400">
+                  <div className="px-3 py-1 flex items-center justify-between text-[11px] font-medium ws-text-muted">
                     <span>{trimmedQuery ? 'Metropolitan Cities' : 'Featured Cities'}</span>
                     {trimmedQuery && (
-                      <span className="font-mono tabular-nums text-slate-500">
+                      <span className="font-mono tabular-nums ws-text-muted">
                         {displayedCities.length} shown
                       </span>
                     )}
@@ -291,7 +288,7 @@ export function GlobalSearchBar({
                         aria-selected={isHighlighted}
                         onMouseEnter={() => setActiveIndex(flatIdx)}
                         className={`flex items-center justify-between gap-2 px-3 py-2 transition-colors ${
-                          isHighlighted ? 'bg-sky-500/15' : 'hover:bg-slate-800/50'
+                          isHighlighted ? 'ws-row-selected' : 'ws-row-hover'
                         }`}
                       >
                         <button
@@ -300,21 +297,21 @@ export function GlobalSearchBar({
                           className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left cursor-pointer"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <Building2 className="w-3.5 h-3.5 ws-warm shrink-0" />
                             <div className="min-w-0">
-                              <p className="text-xs font-medium text-slate-100 truncate">
+                              <p className="text-xs font-medium ws-text truncate">
                                 {city.name}
                               </p>
-                              <p className="text-[11px] text-slate-400 truncate">
+                              <p className="text-[11px] ws-text-muted truncate">
                                 {city.countryName} · {city.primarySector}
                               </p>
                             </div>
                           </div>
                           <div className="text-right font-mono tabular-nums shrink-0">
-                            <p className="text-xs text-slate-200">
+                            <p className="text-xs ws-text-2">
                               {formatCompactNumber(city.population)}
                             </p>
-                            <p className="text-[11px] text-emerald-400">
+                            <p className="text-[11px] ws-positive">
                               ${city.gdpBillions}B
                             </p>
                           </div>
@@ -327,7 +324,7 @@ export function GlobalSearchBar({
                           }}
                           aria-label={`Add ${city.name} to city comparison`}
                           title={`Compare ${city.name}`}
-                          className="p-1.5 text-slate-400 hover:text-sky-300 hover:bg-slate-800 rounded transition-colors shrink-0 cursor-pointer"
+                          className="p-1.5 ws-text-muted hover:ws-accent ws-row-hover ws-radius-sm transition-colors shrink-0 cursor-pointer"
                         >
                           <ArrowRightLeft className="w-3.5 h-3.5" />
                         </button>
@@ -341,7 +338,7 @@ export function GlobalSearchBar({
         </div>
 
         {/* Quiet keyboard hint bar */}
-        <div className="px-3 py-2 bg-[#090E17] border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="px-3 py-2 ws-footnote flex items-center justify-between text-[11px] ws-text-muted">
           <span>
             {trimmedQuery
               ? `${searchResults.totalMatches} match${searchResults.totalMatches === 1 ? '' : 'es'} across 24 nations & ${cities.length} cities`
@@ -356,9 +353,9 @@ export function GlobalSearchBar({
   return (
     <div ref={containerRef} className="relative flex items-center">
       {/* Desktop / Tablet Inline Search Bar */}
-      <div className="hidden md:block relative w-72 lg:w-96">
+      <div className="hidden md:block relative w-64 lg:w-80 xl:w-96">
         <Search
-          className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+          className="w-3.5 h-3.5 ws-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
           aria-hidden="true"
         />
         <input
@@ -383,7 +380,7 @@ export function GlobalSearchBar({
           }}
           onKeyDown={handleKeyDown}
           placeholder="Search countries or cities..."
-          className="w-full bg-[#0D1422] border border-slate-700/90 hover:border-slate-600 focus:border-sky-500 rounded-md pl-8 pr-14 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
+          className="w-full ws-input pl-8 pr-12 py-1.5 text-xs placeholder:opacity-65 focus:outline-none transition-colors"
         />
         {query ? (
           <button
@@ -394,12 +391,12 @@ export function GlobalSearchBar({
               desktopInputRef.current?.focus();
             }}
             aria-label="Clear search query"
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 rounded cursor-pointer"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 ws-text-muted hover:ws-text rounded cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         ) : (
-          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 border border-slate-800 rounded bg-[#090E17]">
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono ws-text-muted border ws-border rounded ws-subpanel">
             /
           </kbd>
         )}
@@ -422,17 +419,17 @@ export function GlobalSearchBar({
         }}
         aria-label="Toggle global search"
         aria-expanded={mobileOpen}
-        className="md:hidden inline-flex items-center justify-center p-2 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700/90 rounded-md transition-colors cursor-pointer"
+        className="md:hidden inline-flex items-center justify-center p-2 ws-btn-subtle transition-colors cursor-pointer"
       >
         <Search className="w-4 h-4" />
       </button>
 
       {/* Mobile Full-Width Search Sheet below Header */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-x-0 top-14 z-50 bg-[#0B111D] border-b border-slate-800 p-3 shadow-2xl">
+        <div className="md:hidden fixed inset-x-0 top-14 z-50 ws-header p-3 shadow-2xl">
           <div className="relative">
             <Search
-              className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              className="w-3.5 h-3.5 ws-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
               aria-hidden="true"
             />
             <input
@@ -452,7 +449,7 @@ export function GlobalSearchBar({
               }}
               onKeyDown={handleKeyDown}
               placeholder="Search countries or cities..."
-              className="w-full bg-[#0D1422] border border-slate-700 focus:border-sky-500 rounded-md pl-8 pr-9 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              className="w-full ws-input pl-8 pr-9 py-2 text-xs placeholder:opacity-65 focus:outline-none"
             />
             <button
               type="button"
@@ -466,7 +463,7 @@ export function GlobalSearchBar({
                 }
               }}
               aria-label={query ? 'Clear search query' : 'Close search'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200 rounded cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 ws-text-muted hover:ws-text rounded cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>

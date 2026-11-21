@@ -1,6 +1,11 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { CityRecord, CountryRecord } from '../types/worldStats';
+import {
+  DEFAULT_DATA_YEAR,
+  type CityRecord,
+  type CountryRecord,
+  type DataYear,
+} from '../types/worldStats';
 import {
   buildCitiesCsv,
   buildComparisonCsv,
@@ -14,6 +19,7 @@ import {
   formatSignedPct,
 } from './analytics';
 import {
+  formatCityDataYear,
   getComparisonSourceFootprint,
   getCountrySourceCitation,
   NATIONAL_OFFICE_BY_COUNTRY,
@@ -30,28 +36,36 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function exportCountriesAsCsv(countries: CountryRecord[]): string {
-  const csv = buildCountriesCsv(countries);
-  const filename = 'worldstats-global-demographics-gdp.csv';
+export function exportCountriesAsCsv(
+  countries: CountryRecord[],
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
+  const csv = buildCountriesCsv(countries, dataYear);
+  const filename = `worldstats-global-demographics-gdp-${dataYear}.csv`;
   triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
   return filename;
 }
 
-export function exportCitiesAsCsv(cities: CityRecord[], label = 'cities'): string {
-  const csv = buildCitiesCsv(cities);
+export function exportCitiesAsCsv(
+  cities: CityRecord[],
+  label = 'cities',
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
+  const csv = buildCitiesCsv(cities, dataYear);
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const filename = `worldstats-${slug}.csv`;
+  const filename = `worldstats-${slug}-${dataYear}.csv`;
   triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
   return filename;
 }
 
 export function exportComparisonAsCsv(
   selectedCities: CityRecord[],
-  countryByCode: Map<string, CountryRecord>
+  countryByCode: Map<string, CountryRecord>,
+  dataYear: DataYear = DEFAULT_DATA_YEAR
 ): string {
-  const csv = buildComparisonCsv(selectedCities, countryByCode);
+  const csv = buildComparisonCsv(selectedCities, countryByCode, dataYear);
   const slug = selectedCities.map((c) => c.name.toLowerCase().replace(/[^a-z0-9]+/g, '')).join('-vs-');
-  const filename = `worldstats-compare-${slug || 'cities'}.csv`;
+  const filename = `worldstats-compare-${slug || 'cities'}-${dataYear}.csv`;
   triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
   return filename;
 }
@@ -85,13 +99,16 @@ function addPdfSourceFooter(doc: jsPDF, sourceLine: string): void {
   }
 }
 
-export function exportGlobalOverviewPdf(countries: CountryRecord[]): string {
+export function exportGlobalOverviewPdf(
+  countries: CountryRecord[],
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const dateStr = new Date().toISOString().slice(0, 10);
   addPdfHeader(
     doc,
-    'Global Demographics & GDP Statistical Atlas',
-    `Generated ${dateStr} · ${countries.length} Major Economies · Age Structure, Projections & Economic Output`
+    `Global Demographics & GDP Statistical Atlas (${dataYear})`,
+    `Reporting Year: ${dataYear} · Generated ${dateStr} · ${countries.length} Major Economies · Age Structure, Projections & GDP`
   );
 
   autoTable(doc, {
@@ -102,7 +119,7 @@ export function exportGlobalOverviewPdf(countries: CountryRecord[]): string {
       'Pop (M)',
       'GDP ($T)',
       'GDP / Cap',
-      '10-Yr GDP Gr.',
+      `10-Yr GDP (${dataYear}–${dataYear + 10})`,
       'Median Age',
       'Working Age',
       '2050 Proj (M)',
@@ -115,7 +132,7 @@ export function exportGlobalOverviewPdf(countries: CountryRecord[]): string {
         c.populationMillions.toFixed(1),
         `$${c.gdpTrillions.toFixed(2)}T`,
         formatCurrency(c.gdpPerCapita),
-        formatSignedPct(computeProjectedGdpGrowth10YrPct(c)),
+        formatSignedPct(computeProjectedGdpGrowth10YrPct(c, dataYear)),
         `${c.medianAge.toFixed(1)} yrs`,
         `${computeWorkingAgeShare(c.ageBrackets)}%`,
         p2050.toFixed(1),
@@ -128,20 +145,24 @@ export function exportGlobalOverviewPdf(countries: CountryRecord[]): string {
 
   addPdfSourceFooter(
     doc,
-    'UN DESA WPP 2024 · IMF WEO · World Bank WDI · National Statistical Offices (2024–2025 Curated Baseline & Modeled Projections)'
+    `UN DESA WPP (${dataYear}) · IMF WEO (${dataYear}) · World Bank WDI · National Statistical Offices (${dataYear} Series)`
   );
-  const filename = 'worldstats-global-overview-report.pdf';
+  const filename = `worldstats-global-overview-${dataYear}.pdf`;
   doc.save(filename);
   return filename;
 }
 
-export function exportCountryDetailPdf(country: CountryRecord, countryCities: CityRecord[]): string {
+export function exportCountryDetailPdf(
+  country: CountryRecord,
+  countryCities: CityRecord[],
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const dateStr = new Date().toISOString().slice(0, 10);
   addPdfHeader(
     doc,
-    `${country.name} — Demographic & Economic Profile`,
-    `Region: ${country.region} · Pop: ${country.populationMillions}M · GDP: $${country.gdpTrillions}T · Generated ${dateStr}`
+    `${country.name} — Demographic & Economic Profile (${dataYear})`,
+    `Reporting Year: ${dataYear} · Region: ${country.region} · Pop: ${country.populationMillions}M · GDP: $${country.gdpTrillions}T · Generated ${dateStr}`
   );
 
   autoTable(doc, {
@@ -152,7 +173,7 @@ export function exportCountryDetailPdf(country: CountryRecord, countryCities: Ci
       ['Annual Pop Growth', `${country.annualPopGrowthPct >= 0 ? '+' : ''}${country.annualPopGrowthPct}%`, 'GDP per Capita', formatCurrency(country.gdpPerCapita)],
       ['Median Age', `${country.medianAge.toFixed(1)} years`, 'Working Age (15-64)', `${computeWorkingAgeShare(country.ageBrackets)}%`],
       ['Dependency Ratio', `${computeDependencyRatio(country.ageBrackets)}`, 'Life Expectancy', `${country.lifeExpectancy.toFixed(1)} years`],
-      ['Fertility Rate', `${country.fertilityRate.toFixed(2)} births/woman`, 'Urbanization', `${country.urbanizationPct.toFixed(1)}%`],
+      ['Fertility Rate', `${country.fertilityRate.toFixed(2)} births/woman`, `10-Yr GDP (${dataYear}–${dataYear + 10})`, formatSignedPct(computeProjectedGdpGrowth10YrPct(country, dataYear))],
     ],
     styles: { fontSize: 8.5, cellPadding: 2.5 },
     headStyles: { fillColor: [15, 23, 42], textColor: [241, 245, 249] },
@@ -162,7 +183,7 @@ export function exportCountryDetailPdf(country: CountryRecord, countryCities: Ci
 
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
-  doc.text('Age Distribution Breakdown', 14, afterKpiY + 9);
+  doc.text(`Age Distribution Breakdown (${dataYear})`, 14, afterKpiY + 9);
 
   autoTable(doc, {
     startY: afterKpiY + 12,
@@ -180,7 +201,7 @@ export function exportCountryDetailPdf(country: CountryRecord, countryCities: Ci
   const afterAgeY = (doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 160;
 
   doc.setFontSize(11);
-  doc.text(`City-Level Breakdown (${countryCities.length} Cities)`, 14, afterAgeY + 9);
+  doc.text(`City-Level Breakdown (${countryCities.length} Cities · ${dataYear})`, 14, afterAgeY + 9);
 
   autoTable(doc, {
     startY: afterAgeY + 12,
@@ -200,20 +221,24 @@ export function exportCountryDetailPdf(country: CountryRecord, countryCities: Ci
 
   addPdfSourceFooter(
     doc,
-    `${getCountrySourceCitation(country.code)} · OECD Metro Statistics (2024–2025 Curated Baseline)`
+    `${getCountrySourceCitation(country.code, dataYear)} · OECD Metro Statistics (${dataYear})`
   );
-  const filename = `worldstats-${country.code.toLowerCase()}-report.pdf`;
+  const filename = `worldstats-${country.code.toLowerCase()}-${dataYear}-report.pdf`;
   doc.save(filename);
   return filename;
 }
 
-export function exportCitiesPdf(cities: CityRecord[], filterSummary: string): string {
+export function exportCitiesPdf(
+  cities: CityRecord[],
+  filterSummary: string,
+  dataYear: DataYear = DEFAULT_DATA_YEAR
+): string {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const dateStr = new Date().toISOString().slice(0, 10);
   addPdfHeader(
     doc,
-    'Global City-Level Demographic & Economic Directory',
-    `${filterSummary} · ${cities.length} Cities · Generated ${dateStr}`
+    `Global City-Level Demographic & Economic Directory (${dataYear})`,
+    `${filterSummary} · Reporting Year: ${dataYear} · ${cities.length} Cities · Generated ${dateStr}`
   );
 
   autoTable(doc, {
@@ -237,24 +262,25 @@ export function exportCitiesPdf(cities: CityRecord[], filterSummary: string): st
 
   addPdfSourceFooter(
     doc,
-    'National Statistical Offices (incl. BPS Indonesia, Statistics Canada, U.S. Census, e-Stat) · OECD Metro Statistics · UN-Habitat'
+    `National Statistical Offices (${dataYear}, incl. BPS Indonesia, Statistics Canada, U.S. Census, e-Stat) · OECD Metro Statistics · UN-Habitat`
   );
-  const filename = 'worldstats-cities-directory.pdf';
+  const filename = `worldstats-cities-directory-${dataYear}.pdf`;
   doc.save(filename);
   return filename;
 }
 
 export function exportComparisonPdf(
   selectedCities: CityRecord[],
-  countryByCode: Map<string, CountryRecord>
+  countryByCode: Map<string, CountryRecord>,
+  dataYear: DataYear = DEFAULT_DATA_YEAR
 ): string {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const dateStr = new Date().toISOString().slice(0, 10);
   const titleCities = selectedCities.map((c) => `${c.name} (${c.countryCode})`).join(' vs. ');
   addPdfHeader(
     doc,
-    'Side-by-Side City Demographic & Economic Comparison',
-    `${titleCities} · Generated ${dateStr}`
+    `Side-by-Side City Demographic & Economic Comparison (${dataYear})`,
+    `${titleCities} · Reporting Year: ${dataYear} · Generated ${dateStr}`
   );
 
   const matrix = computeCityComparisonMatrix(selectedCities, countryByCode);
@@ -279,9 +305,7 @@ export function exportComparisonPdf(
       ],
       [
         'Year of Official Data Source',
-        ...selectedCities.map(
-          (c) => NATIONAL_OFFICE_BY_COUNTRY[c.countryCode]?.cityDataYear ?? '2024'
-        ),
+        ...selectedCities.map((c) => formatCityDataYear(c.countryCode, dataYear)),
       ],
     ],
     styles: { fontSize: 8.5, cellPadding: 2.6 },
@@ -291,10 +315,10 @@ export function exportComparisonPdf(
 
   addPdfSourceFooter(
     doc,
-    getComparisonSourceFootprint(selectedCities.map((c) => c.countryCode))
+    getComparisonSourceFootprint(selectedCities.map((c) => c.countryCode), dataYear)
   );
   const slug = selectedCities.map((c) => c.name.toLowerCase().replace(/[^a-z0-9]+/g, '')).join('-vs-');
-  const filename = `worldstats-comparison-${slug || 'cities'}.pdf`;
+  const filename = `worldstats-comparison-${slug || 'cities'}-${dataYear}.pdf`;
   doc.save(filename);
   return filename;
 }

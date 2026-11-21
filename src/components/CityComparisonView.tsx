@@ -13,9 +13,10 @@ import {
 } from 'recharts';
 import { Download, Plus, X } from 'lucide-react';
 import { COMPARISON_PRESETS } from '../data/worldDataset';
-import type { CityRecord, CountryRecord } from '../types/worldStats';
+import type { CityRecord, CountryRecord, DataYear } from '../types/worldStats';
 import { computeCityComparisonMatrix, formatCompactNumber } from '../utils/analytics';
 import {
+  formatCityDataYear,
   getComparisonSourceFootprint,
   NATIONAL_OFFICE_BY_COUNTRY,
 } from '../data/dataSources';
@@ -24,6 +25,7 @@ import { SourceFootnote } from './SourceFootnote';
 interface CityComparisonViewProps {
   cities: CityRecord[];
   countries: CountryRecord[];
+  dataYear: DataYear;
   selectedCityIds: string[];
   onChangeCityIds: (ids: string[]) => void;
   onExportCsv: () => void;
@@ -31,11 +33,21 @@ interface CityComparisonViewProps {
   onOpenSources: () => void;
 }
 
-const SERIES_COLORS = ['#38BDF8', '#34D399', '#F59E0B', '#FB7185'];
+const SERIES_COLORS = ['#0EA5E9', '#10B981', '#F59E0B', '#E11D48'];
+
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: 'var(--ws-popover-bg)',
+  borderColor: 'var(--ws-border-strong)',
+  color: 'var(--ws-text)',
+  borderRadius: 'var(--ws-radius-sm)',
+  fontSize: '12px',
+  boxShadow: 'var(--ws-shadow-popover)',
+};
 
 export function CityComparisonView({
   cities,
   countries,
+  dataYear,
   selectedCityIds,
   onChangeCityIds,
   onExportCsv,
@@ -98,8 +110,8 @@ export function CityComparisonView({
   );
 
   const comparisonSourceText = useMemo(
-    () => getComparisonSourceFootprint(selectedCities.map((c) => c.countryCode)),
-    [selectedCities]
+    () => getComparisonSourceFootprint(selectedCities.map((c) => c.countryCode), dataYear),
+    [selectedCities, dataYear]
   );
 
   const ageChartData = useMemo(() => {
@@ -122,7 +134,7 @@ export function CityComparisonView({
 
   const trajectoryChartData = useMemo(() => {
     const years = [
-      { year: '2025', pick: (c: CityRecord) => Number((c.population / 1_000_000).toFixed(2)) },
+      { year: String(dataYear), pick: (c: CityRecord) => Number((c.population / 1_000_000).toFixed(2)) },
       { year: '2035', pick: (c: CityRecord) => Number((c.projected2035 / 1_000_000).toFixed(2)) },
       { year: '2050', pick: (c: CityRecord) => Number((c.projected2050 / 1_000_000).toFixed(2)) },
     ];
@@ -133,7 +145,7 @@ export function CityComparisonView({
       });
       return row;
     });
-  }, [selectedCities]);
+  }, [selectedCities, dataYear]);
 
   const handleAddCity = () => {
     if (!effectiveCandidateId || selectedCityIds.length >= 4) return;
@@ -156,13 +168,13 @@ export function CityComparisonView({
   return (
     <div className="space-y-6">
       {/* Header + Presets + City Picker */}
-      <section className="bg-[#111827] border border-slate-800/90 rounded-lg">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-4 border-b border-slate-800/80">
+      <section className="ws-panel overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-4 border-b ws-border">
           <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <span>Side-by-Side Analysis</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs ws-text-muted">
+              <span>Side-by-Side Analysis ({dataYear})</span>
               <span aria-hidden="true">·</span>
-              <span className="text-sky-300 font-medium">
+              <span className="ws-accent font-medium">
                 {isSameCountryComparison
                   ? `Same-Country Mode (${selectedCities[0]?.countryName})`
                   : 'Cross-Country Mode'}
@@ -170,7 +182,7 @@ export function CityComparisonView({
               <span aria-hidden="true">·</span>
               <span>{selectedCities.length} of 4 slots active</span>
             </div>
-            <h1 className="text-xl font-semibold text-slate-50 mt-1">
+            <h1 className="text-xl font-semibold ws-text mt-1">
               City &amp; Country Side-by-Side Comparison
             </h1>
           </div>
@@ -179,7 +191,7 @@ export function CityComparisonView({
             <button
               type="button"
               onClick={onExportCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ws-btn-subtle transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export CSV</span>
@@ -187,7 +199,7 @@ export function CityComparisonView({
             <button
               type="button"
               onClick={onExportPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ws-btn-subtle transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export PDF</span>
@@ -196,8 +208,8 @@ export function CityComparisonView({
         </div>
 
         {/* Preset Strip */}
-        <div className="px-5 py-3 bg-[#0D1422] border-b border-slate-800/80 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-400 mr-1">Quick Presets:</span>
+        <div className="px-5 py-3 ws-subpanel border-b ws-border flex flex-wrap items-center gap-2">
+          <span className="text-xs ws-text-muted mr-1">Quick Presets:</span>
           {COMPARISON_PRESETS.map((preset) => {
             const isActive =
               preset.cityIds.length === selectedCityIds.length &&
@@ -207,10 +219,8 @@ export function CityComparisonView({
                 key={preset.id}
                 type="button"
                 onClick={() => onChangeCityIds([...preset.cityIds])}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  isActive
-                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                    : 'bg-[#111827] text-slate-300 border-slate-800 hover:border-slate-600'
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  isActive ? 'ws-nav-active' : 'ws-btn-subtle'
                 }`}
               >
                 {preset.label}
@@ -225,7 +235,7 @@ export function CityComparisonView({
             {selectedCities.map((city, idx) => (
               <div
                 key={city.id}
-                className="bg-[#0B111D] border border-slate-800 rounded-md p-3.5 flex flex-col justify-between gap-2.5"
+                className="ws-inset p-3.5 flex flex-col justify-between gap-2.5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -233,7 +243,7 @@ export function CityComparisonView({
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: SERIES_COLORS[idx] }}
                     />
-                    <span className="text-xs text-slate-400 truncate">
+                    <span className="text-xs ws-text-muted truncate">
                       {idx === 0 ? 'Baseline · ' : `City ${idx + 1} · `}
                       {city.countryName}
                     </span>
@@ -243,7 +253,7 @@ export function CityComparisonView({
                       type="button"
                       onClick={() => handleRemoveCity(city.id)}
                       aria-label={`Remove ${city.name} from comparison`}
-                      className="text-slate-400 hover:text-rose-400 p-0.5 transition-colors cursor-pointer"
+                      className="ws-text-muted hover:ws-negative p-0.5 transition-colors cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -254,7 +264,7 @@ export function CityComparisonView({
                   aria-label={`Select city for slot ${idx + 1}`}
                   value={city.id}
                   onChange={(e) => handleSwapCity(idx, e.target.value)}
-                  className="w-full bg-[#111827] border border-slate-700/90 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-100 focus:outline-none focus:border-sky-500"
+                  className="w-full ws-input px-2.5 py-1.5 text-xs font-semibold focus:outline-none"
                 >
                   {citiesGroupedByCountry.map(([countryName, groupCities]) => (
                     <optgroup key={countryName} label={`${countryName} (${groupCities.length})`}>
@@ -271,24 +281,24 @@ export function CityComparisonView({
                   ))}
                 </select>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono tabular-nums">
+                <div className="flex items-center justify-between text-[11px] ws-text-muted font-mono tabular-nums">
                   <span>Pop {formatCompactNumber(city.population)}</span>
-                  <span className="text-emerald-400">${city.gdpBillions}B</span>
-                  <span className="text-amber-300">{city.medianAge}y</span>
+                  <span className="ws-positive">${city.gdpBillions}B</span>
+                  <span className="ws-warm">{city.medianAge}y</span>
                 </div>
               </div>
             ))}
 
             {/* Add City Slot */}
             {selectedCities.length < 4 && (
-              <div className="bg-[#0B111D]/60 border border-dashed border-slate-700/90 rounded-md p-3.5 flex flex-col justify-between gap-2">
-                <p className="text-xs font-medium text-slate-300">Add City to Compare</p>
+              <div className="ws-inset border-dashed ws-border-strong p-3.5 flex flex-col justify-between gap-2">
+                <p className="text-xs font-medium ws-text-2">Add City to Compare</p>
 
                 <select
                   aria-label="Filter available cities by country"
                   value={countryFilter}
                   onChange={(e) => setCountryFilter(e.target.value)}
-                  className="w-full bg-[#111827] border border-slate-700/90 rounded px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-sky-500"
+                  className="w-full ws-input px-2 py-1 text-[11px] focus:outline-none"
                 >
                   <option value="ALL">All Countries (Cross-Border)</option>
                   {selectedCities[0] && (
@@ -309,7 +319,7 @@ export function CityComparisonView({
                     value={effectiveCandidateId}
                     onChange={(e) => setCandidateCityId(e.target.value)}
                     disabled={availableCities.length === 0}
-                    className="flex-1 min-w-0 bg-[#111827] border border-slate-700/90 rounded px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="flex-1 min-w-0 ws-input px-2 py-1.5 text-xs focus:outline-none"
                   >
                     {availableCities.length === 0 ? (
                       <option value="">No remaining cities</option>
@@ -326,7 +336,7 @@ export function CityComparisonView({
                     onClick={handleAddCity}
                     disabled={!effectiveCandidateId}
                     aria-label="Add selected city to comparison"
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-950 bg-sky-400 hover:bg-sky-300 disabled:opacity-40 rounded transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold ws-btn-primary disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add</span>
@@ -342,13 +352,13 @@ export function CityComparisonView({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <section
           aria-label="Age distribution comparison chart"
-          className="bg-[#111827] border border-slate-800/90 rounded-lg"
+          className="ws-panel overflow-hidden"
         >
-          <div className="px-5 py-4 border-b border-slate-800/80">
-            <h2 className="text-base font-semibold text-slate-100">
-              Age Cohort Distribution Comparison
+          <div className="px-5 py-4 border-b ws-border">
+            <h2 className="text-base font-semibold ws-text">
+              Age Cohort Distribution Comparison ({dataYear})
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs ws-text-muted mt-0.5">
               Percentage of municipal population within each demographic age bracket
             </p>
           </div>
@@ -356,30 +366,25 @@ export function CityComparisonView({
           <div className="p-4 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ageChartData} margin={{ top: 10, right: 16, left: 0, bottom: 6 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" />
                 <XAxis
                   dataKey="bracket"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                 />
                 <YAxis
                   tickFormatter={(v) => `${v}%`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={44}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0B111D',
-                    borderColor: '#334155',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                   formatter={(value, name) => [`${value ?? ''}%`, String(name ?? '')]}
                 />
                 <Legend
                   content={() => (
-                    <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-xs text-slate-300">
+                    <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-xs ws-text-2">
                       {selectedCities.map((city, idx) => (
                         <span key={city.id} className="inline-flex items-center gap-1.5">
                           <span
@@ -410,13 +415,13 @@ export function CityComparisonView({
 
         <section
           aria-label="Population trajectory comparison chart"
-          className="bg-[#111827] border border-slate-800/90 rounded-lg"
+          className="ws-panel overflow-hidden"
         >
-          <div className="px-5 py-4 border-b border-slate-800/80">
-            <h2 className="text-base font-semibold text-slate-100">
-              Projected Population Trajectory (2025–2050)
+          <div className="px-5 py-4 border-b ws-border">
+            <h2 className="text-base font-semibold ws-text">
+              Projected Population Trajectory ({dataYear}–2050)
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs ws-text-muted mt-0.5">
               Municipal population forecast in millions across selected cities
             </p>
           </div>
@@ -424,30 +429,25 @@ export function CityComparisonView({
           <div className="p-4 h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trajectoryChartData} margin={{ top: 10, right: 20, left: 4, bottom: 6 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" />
                 <XAxis
                   dataKey="year"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                 />
                 <YAxis
                   tickFormatter={(v) => `${v}M`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={52}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0B111D',
-                    borderColor: '#334155',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                   formatter={(value, name) => [`${value ?? ''}M`, String(name ?? '')]}
                 />
                 <Legend
                   content={() => (
-                    <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-xs text-slate-300">
+                    <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-xs ws-text-2">
                       {selectedCities.map((city, idx) => (
                         <span key={city.id} className="inline-flex items-center gap-1.5">
                           <span
@@ -482,13 +482,13 @@ export function CityComparisonView({
       {/* Detailed Side-by-Side Comparison Matrix */}
       <section
         aria-label="Side by side comparison table"
-        className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden"
+        className="ws-panel overflow-hidden"
       >
-        <div className="px-5 py-4 border-b border-slate-800/80">
-          <h2 className="text-base font-semibold text-slate-100">
-            Indicator Comparison Matrix
+        <div className="px-5 py-4 border-b ws-border">
+          <h2 className="text-base font-semibold ws-text">
+            Indicator Comparison Matrix ({dataYear})
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs ws-text-muted mt-0.5">
             Percentage deltas are computed relative to baseline city ({selectedCities[0]?.name})
           </p>
         </div>
@@ -496,45 +496,45 @@ export function CityComparisonView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-800 bg-[#0D1422] text-slate-400">
+              <tr className="border-b ws-border ws-subpanel ws-text-2">
                 <th className="py-3 px-4 font-medium min-w-[180px]">Indicator</th>
                 {selectedCities.map((city, idx) => (
                   <th key={city.id} className="py-3 px-4 font-medium text-right min-w-[155px]">
-                    <span className="inline-flex items-center justify-end gap-1.5 text-slate-100">
+                    <span className="inline-flex items-center justify-end gap-1.5 ws-text">
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: SERIES_COLORS[idx] }}
                       />
                       <span>{city.name}</span>
                     </span>
-                    <span className="block text-[11px] font-normal text-slate-400 mt-0.5">
+                    <span className="block text-[11px] font-normal ws-text-muted mt-0.5">
                       {city.countryName}
                     </span>
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70">
+            <tbody className="ws-divide">
               {matrix.map((row) => (
-                <tr key={row.key} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="py-3 px-4 font-medium text-slate-200">{row.label}</td>
+                <tr key={row.key} className="ws-row-hover transition-colors">
+                  <td className="py-3 px-4 font-medium ws-text">{row.label}</td>
                   {row.values.map((cell, idx) => (
                     <td key={cell.cityId} className="py-3 px-4 text-right font-mono tabular-nums">
                       <span
                         className={
                           cell.isHighest
-                            ? 'text-sky-300 font-semibold'
-                            : 'text-slate-200'
+                            ? 'ws-accent font-semibold'
+                            : 'ws-text-2'
                         }
                       >
                         {cell.formatted}
                       </span>
                       {idx === 0 ? (
-                        <span className="block text-[10px] text-slate-500 mt-0.5">Baseline</span>
+                        <span className="block text-[10px] ws-text-muted mt-0.5">Baseline</span>
                       ) : cell.deltaFromFirstPct !== null ? (
                         <span
                           className={`block text-[10px] mt-0.5 ${
-                            cell.deltaFromFirstPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                            cell.deltaFromFirstPct >= 0 ? 'ws-positive' : 'ws-negative'
                           }`}
                         >
                           {cell.deltaFromFirstPct >= 0 ? '+' : ''}
@@ -546,28 +546,28 @@ export function CityComparisonView({
                 </tr>
               ))}
               {/* Primary sector qualitative row */}
-              <tr className="hover:bg-slate-800/30">
-                <td className="py-3 px-4 font-medium text-slate-200">Primary Economic Sector</td>
+              <tr className="ws-row-hover">
+                <td className="py-3 px-4 font-medium ws-text">Primary Economic Sector</td>
                 {selectedCities.map((city) => (
-                  <td key={city.id} className="py-3 px-4 text-right text-slate-300">
+                  <td key={city.id} className="py-3 px-4 text-right ws-text-2">
                     {city.primarySector}
                   </td>
                 ))}
               </tr>
               {/* Official National Source & Year rows */}
-              <tr className="bg-[#0D1422]/60 hover:bg-slate-800/30">
-                <td className="py-3 px-4 font-medium text-emerald-300">
+              <tr className="ws-subpanel ws-row-hover">
+                <td className="py-3 px-4 font-medium ws-positive">
                   Official National Statistical Agency
                 </td>
                 {selectedCities.map((city) => {
                   const office = NATIONAL_OFFICE_BY_COUNTRY[city.countryCode];
                   return (
-                    <td key={city.id} className="py-3 px-4 text-right text-slate-200">
+                    <td key={city.id} className="py-3 px-4 text-right ws-text">
                       <span className="block font-medium">
                         {office?.shortName ?? `${city.countryName} NSO`}
                       </span>
                       {office && (
-                        <span className="block text-[10px] text-slate-400 mt-0.5">
+                        <span className="block text-[10px] ws-text-muted mt-0.5">
                           {office.publication}
                         </span>
                       )}
@@ -575,29 +575,26 @@ export function CityComparisonView({
                   );
                 })}
               </tr>
-              <tr className="bg-[#0D1422]/60 hover:bg-slate-800/30">
-                <td className="py-3 px-4 font-medium text-sky-300">
+              <tr className="ws-subpanel ws-row-hover">
+                <td className="py-3 px-4 font-medium ws-accent">
                   Year of Official Data Source
                 </td>
-                {selectedCities.map((city) => {
-                  const office = NATIONAL_OFFICE_BY_COUNTRY[city.countryCode];
-                  return (
-                    <td
-                      key={city.id}
-                      className="py-3 px-4 text-right font-mono tabular-nums text-sky-300"
-                    >
-                      {office?.cityDataYear ?? '2024'}
-                    </td>
-                  );
-                })}
+                {selectedCities.map((city) => (
+                  <td
+                    key={city.id}
+                    className="py-3 px-4 text-right font-mono tabular-nums ws-accent"
+                  >
+                    {formatCityDataYear(city.countryCode, dataYear)}
+                  </td>
+                ))}
               </tr>
-              <tr className="bg-[#0D1422]/60 hover:bg-slate-800/30">
-                <td className="py-3 px-4 font-medium text-slate-300">
+              <tr className="ws-subpanel ws-row-hover">
+                <td className="py-3 px-4 font-medium ws-text-2">
                   International Cross-Check Benchmark
                 </td>
                 {selectedCities.map((city) => (
-                  <td key={city.id} className="py-3 px-4 text-right text-slate-400">
-                    OECD Metro &amp; UN-Habitat (2024)
+                  <td key={city.id} className="py-3 px-4 text-right ws-text-muted">
+                    OECD Metro &amp; UN-Habitat ({dataYear})
                   </td>
                 ))}
               </tr>
@@ -606,7 +603,7 @@ export function CityComparisonView({
         </div>
         <SourceFootnote
           sourceText={comparisonSourceText}
-          vintage="Harmonized Municipal Benchmark"
+          vintage={`Harmonized Municipal Benchmark (${dataYear})`}
           onOpenSources={onOpenSources}
         />
       </section>

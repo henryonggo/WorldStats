@@ -1,4 +1,5 @@
-import type { CountryRecord } from '../types/worldStats';
+import type { CountryRecord, DataYear } from '../types/worldStats';
+import { DEFAULT_DATA_YEAR } from '../types/worldStats';
 
 export interface InstitutionalSource {
   id: string;
@@ -37,6 +38,7 @@ export interface MultiSourceRecord {
 export interface CountryMultiSourceComparison {
   countryCode: string;
   countryName: string;
+  selectedYear: DataYear;
   officialAgencyName: string;
   officialDataYear: string;
   popSpreadPct: number;
@@ -48,33 +50,33 @@ export const INSTITUTIONAL_SOURCES: InstitutionalSource[] = [
   {
     id: 'un-desa',
     agency: 'UN DESA Population Division',
-    dataset: 'World Population Prospects (2024 Revision)',
+    dataset: 'World Population Prospects (2024 Revision · 2024–2026 Annual Series)',
     coverage: 'National population, 5-year age-sex pyramids, median age, fertility rates, 2020–2100 Low/Medium/High variants',
-    vintage: '2024–2025 Baseline',
+    vintage: '2024–2026 Series',
     url: 'https://population.un.org/wpp/',
   },
   {
     id: 'imf-weo',
     agency: 'International Monetary Fund (IMF)',
-    dataset: 'World Economic Outlook Database',
-    coverage: 'Nominal GDP (USD Trillions), GDP per capita, real annual GDP growth, medium-term macro projections',
-    vintage: 'Oct 2024 / 2025 Est.',
+    dataset: 'World Economic Outlook Database (Oct 2026 Update)',
+    coverage: 'Nominal GDP (USD Trillions), GDP per capita, real annual GDP growth, 2024–2026 estimates & 10-year macro outlook',
+    vintage: '2024–2026 (Oct 2026)',
     url: 'https://www.imf.org/en/Publications/WEO',
   },
   {
     id: 'world-bank',
     agency: 'World Bank Open Data',
-    dataset: 'World Development Indicators (WDI)',
-    coverage: 'Urbanization share, life expectancy at birth, labor-force working-age (15–64) ratios',
-    vintage: '2023–2024 Audited Release',
+    dataset: 'World Development Indicators (WDI Audited Annual Series)',
+    coverage: 'Urbanization share, life expectancy at birth, labor-force working-age (15–64) ratios (trails provisional year by ~1 yr)',
+    vintage: '2023–2025 Audited',
     url: 'https://data.worldbank.org/',
   },
   {
     id: 'oecd-metro',
     agency: 'OECD & UN-Habitat',
     dataset: 'Metropolitan Regions Database & World Cities Report',
-    coverage: 'Functional urban area (metro) population, density, and municipal economic output benchmarks',
-    vintage: '2023–2024 Est.',
+    coverage: 'Functional urban area (metro) population, density, and municipal economic output benchmarks (2024–2026)',
+    vintage: '2024–2026 Harmonized',
     url: 'https://www.oecd.org/regional/regional-statistics/',
   },
   {
@@ -92,301 +94,280 @@ export const NATIONAL_OFFICE_BY_COUNTRY: Record<string, NationalOfficeMeta> = {
     agency: 'U.S. Census Bureau & Bureau of Economic Analysis (BEA)',
     shortName: 'U.S. Census / BEA',
     publication: 'Population Estimates Program & NIPA GDP Tables',
-    dataYear: '2024',
-    cityDataYear: '2024 (MSA)',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2026 (MSA)',
     url: 'https://www.census.gov/',
   },
   CHN: {
     agency: 'National Bureau of Statistics of China (NBS)',
     shortName: 'NBS China',
     publication: 'Statistical Communiqué on National Economic & Social Development',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2026 Est.',
     url: 'https://www.stats.gov.cn/english/',
   },
   IND: {
     agency: 'Ministry of Statistics and Programme Implementation (MoSPI)',
     shortName: 'MoSPI India',
-    publication: 'National Accounts Statistics (FY24–25) & Census Projections',
-    dataYear: '2024 (FY24)',
-    cityDataYear: '2024 Est.',
+    publication: 'National Accounts Statistics (FY26–27) & Census Projections',
+    dataYear: '2026 (FY26)',
+    cityDataYear: '2026 Est.',
     url: 'https://www.mospi.gov.in/',
   },
   JPN: {
     agency: 'Statistics Bureau of Japan (e-Stat) & Cabinet Office',
     shortName: 'e-Stat Japan',
-    publication: 'Population Estimates & Annual Report on National Accounts',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    publication: 'Population Estimates & Quarterly National Accounts',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2026',
     url: 'https://www.stat.go.jp/english/',
   },
   DEU: {
     agency: 'Destatis (Federal Statistical Office of Germany) & Eurostat',
     shortName: 'Destatis / Eurostat',
-    publication: 'Zensus 2022–2024 Update & Volkswirtschaftliche Gesamtrechnungen',
-    dataYear: '2024',
-    cityDataYear: '2023–2024',
+    publication: 'Population Update & Volkswirtschaftliche Gesamtrechnungen',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2025–2026',
     url: 'https://www.destatis.de/EN/',
   },
   GBR: {
     agency: 'Office for National Statistics (ONS)',
     shortName: 'ONS UK',
-    publication: 'Mid-Year Population Estimates & UK National Accounts Blue Book',
-    dataYear: '2024',
-    cityDataYear: '2023–2024',
+    publication: 'Mid-Year Population Estimates & UK National Accounts',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2025–2026',
     url: 'https://www.ons.gov.uk/',
   },
   FRA: {
     agency: 'INSEE (National Institute of Statistics and Economic Studies)',
     shortName: 'INSEE / Eurostat',
     publication: 'Bilan Démographique & Comptes Nationaux',
-    dataYear: '2024',
-    cityDataYear: '2023–2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2025–2026',
     url: 'https://www.insee.fr/en/',
   },
   BRA: {
     agency: 'IBGE (Brazilian Institute of Geography and Statistics)',
     shortName: 'IBGE Brazil',
-    publication: 'Censo Demográfico 2022–2024 Projection & Contas Nacionais',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    publication: 'Projeções da População & Contas Nacionais Trimestrais',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.ibge.gov.br/en/',
   },
   NGA: {
     agency: 'National Bureau of Statistics Nigeria (NBS)',
     shortName: 'NBS Nigeria',
     publication: 'Nigerian GDP Report & NPC Demographic Projections',
-    dataYear: '2024',
-    cityDataYear: '2024 Est.',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026 Est.',
     url: 'https://nigerianstat.gov.ng/',
   },
   IDN: {
     agency: 'BPS — Badan Pusat Statistik (Statistics Indonesia)',
     shortName: 'BPS Indonesia',
     publication: 'Statistik Indonesia, Proyeksi Penduduk & PDB / PDRB',
-    dataYear: '2024',
-    cityDataYear: '2024 (PDRB)',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2026 (PDRB)',
     url: 'https://www.bps.go.id/en',
   },
   CAN: {
     agency: 'Statistics Canada (StatCan)',
     shortName: 'Statistics Canada',
-    publication: 'Quarterly Demographic Estimates (Q4) & Provincial/CMA GDP',
-    dataYear: '2024',
-    cityDataYear: '2024 (CMA)',
+    publication: 'Quarterly Demographic Estimates & Provincial/CMA GDP',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2026 (CMA)',
     url: 'https://www.statcan.gc.ca/',
   },
   AUS: {
     agency: 'Australian Bureau of Statistics (ABS)',
     shortName: 'ABS Australia',
     publication: 'National, State & Territory Population & Australian National Accounts',
-    dataYear: '2024',
-    cityDataYear: '2024 (GCCSA)',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026 (GCCSA)',
     url: 'https://www.abs.gov.au/',
   },
   KOR: {
     agency: 'Statistics Korea (KOSTAT) & Bank of Korea',
     shortName: 'KOSTAT',
-    publication: 'Population and Housing Census & National Accounts',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    publication: 'Population & Housing Census Projections & National Accounts',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://kostat.go.kr/ansk/',
   },
   MEX: {
     agency: 'INEGI (National Institute of Statistics and Geography)',
     shortName: 'INEGI Mexico',
     publication: 'ENOE Demographic Survey & Sistema de Cuentas Nacionales',
-    dataYear: '2024',
-    cityDataYear: '2023–2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2025–2026',
     url: 'https://en.www.inegi.org.mx/',
   },
   EGY: {
     agency: 'CAPMAS (Central Agency for Public Mobilization and Statistics)',
     shortName: 'CAPMAS Egypt',
     publication: 'Statistical Yearbook & Ministry of Planning GDP Release',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.capmas.gov.eg/',
   },
   ZAF: {
     agency: 'Statistics South Africa (Stats SA)',
     shortName: 'Stats SA',
     publication: 'Mid-Year Population Estimates & Quarterly GDP Statistical Release',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.statssa.gov.za/',
   },
   ARG: {
     agency: 'INDEC (National Institute of Statistics and Censuses)',
     shortName: 'INDEC Argentina',
-    publication: 'Censo 2022–2024 Projections & Cuentas Nacionales',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    publication: 'Demographic Projections & Cuentas Nacionales',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.indec.gob.ar/',
   },
   VNM: {
     agency: 'General Statistics Office of Vietnam (GSO)',
     shortName: 'GSO Vietnam',
     publication: 'Socio-Economic Situation Report & Statistical Yearbook',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Q3 Est.)',
+    cityDataYear: '2026',
     url: 'https://www.gso.gov.vn/en/',
   },
   TUR: {
     agency: 'TurkStat (Turkish Statistical Institute)',
     shortName: 'TurkStat',
     publication: 'Address Based Population Registration System (ADNKS) & GDP',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.tuik.gov.tr/',
   },
   POL: {
     agency: 'Statistics Poland (GUS) & Eurostat',
     shortName: 'GUS / Eurostat',
     publication: 'Demographic Yearbook of Poland & National Accounts',
-    dataYear: '2024',
-    cityDataYear: '2023–2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2025–2026',
     url: 'https://stat.gov.pl/en/',
   },
   ESP: {
     agency: 'INE Spain (National Statistics Institute) & Eurostat',
     shortName: 'INE Spain / Eurostat',
     publication: 'Continuous Population Statistics (ECP) & Contabilidad Nacional',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.ine.es/en/',
   },
   KEN: {
     agency: 'Kenya National Bureau of Statistics (KNBS)',
     shortName: 'KNBS Kenya',
-    publication: 'Economic Survey 2024 & Analytical Population Projections',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    publication: 'Economic Survey & Analytical Population Projections',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.knbs.or.ke/',
   },
   SAU: {
     agency: 'General Authority for Statistics (GASTAT)',
     shortName: 'GASTAT Saudi Arabia',
     publication: 'Saudi Census Population Estimates & National Accounts',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.stats.gov.sa/en',
   },
   SGP: {
     agency: 'Singapore Department of Statistics (SingStat)',
     shortName: 'SingStat',
-    publication: 'Population Trends 2024 & Singapore National Accounts',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    publication: 'Population Trends & Singapore National Accounts',
+    dataYear: '2026 (Est.)',
+    cityDataYear: '2026',
     url: 'https://www.singstat.gov.sg/',
   },
 };
 
-interface OfficialNationalOverride {
-  populationMillions: number;
-  gdpTrillions: number;
-  gdpPerCapita: number;
-  medianAge: number;
-  methodologyNote: string;
-  wbDataYear: string;
-  wbPopMillions: number;
-  wbGdpTrillions: number;
-  wbGdpPerCapita: number;
+export function formatNationalDataYear(countryCode: string, year: DataYear): string {
+  const meta = NATIONAL_OFFICE_BY_COUNTRY[countryCode];
+  if (!meta) return String(year);
+  if (year === 2026) return meta.dataYear;
+  if (year === 2025) return countryCode === 'IND' ? '2025 (FY25)' : '2025';
+  return countryCode === 'IND' ? '2024 (FY24)' : '2024';
+}
+
+export function formatCityDataYear(countryCode: string, year: DataYear): string {
+  if (countryCode === 'IDN') return `${year} (PDRB)`;
+  if (countryCode === 'CAN') return `${year} (CMA)`;
+  if (countryCode === 'USA') return `${year} (MSA)`;
+  if (countryCode === 'AUS') return `${year} (GCCSA)`;
+  return year === 2026 ? '2026 Est.' : String(year);
+}
+
+interface OfficialNationalRatioOverride {
+  popRatioVsUn: number;
+  gdpRatioVsImf: number;
+  medianAgeDelta: number;
+  methodologyNote: (year: DataYear) => string;
 }
 
 /**
- * Curated official national statistical office figures vs. lagged World Bank WDI releases
+ * Curated official national statistical office variance ratios vs. UN DESA / IMF
  * for high-scrutiny benchmark nations. Differences reflect census vs. UN intercensal
- * methodology, local FX conversion windows, and resident vs. de facto definitions.
+ * methodology, temporary-resident coverage, and local FX conversion windows.
  */
-const OFFICIAL_BENCHMARK_OVERRIDES: Record<string, OfficialNationalOverride> = {
+const OFFICIAL_BENCHMARK_RATIOS: Record<string, OfficialNationalRatioOverride> = {
   IDN: {
-    populationMillions: 281.6,
-    gdpTrillions: 1.4,
-    gdpPerCapita: 4960,
-    medianAge: 30.0,
-    methodologyNote: 'BPS mid-year Proyeksi Penduduk & PDB nominal (converted at BI 2024 average IDR/USD rate)',
-    wbDataYear: '2023',
-    wbPopMillions: 277.5,
-    wbGdpTrillions: 1.37,
-    wbGdpPerCapita: 4940,
+    popRatioVsUn: 0.9933,
+    gdpRatioVsImf: 0.968,
+    medianAgeDelta: -0.1,
+    methodologyNote: (y) =>
+      `BPS mid-year Proyeksi Penduduk ${y} & PDB nominal (converted at BI ${y} average IDR/USD rate)`,
   },
   CAN: {
-    populationMillions: 41.3,
-    gdpTrillions: 2.21,
-    gdpPerCapita: 53510,
-    medianAge: 40.3,
-    methodologyNote: 'StatCan Q4 2024 demographic estimate (includes temporary residents) & SNA nominal GDP',
-    wbDataYear: '2023',
-    wbPopMillions: 40.1,
-    wbGdpTrillions: 2.14,
-    wbGdpPerCapita: 53370,
+    popRatioVsUn: 1.0295,
+    gdpRatioVsImf: 0.987,
+    medianAgeDelta: -0.2,
+    methodologyNote: (y) =>
+      `StatCan ${y} demographic estimate (includes temporary residents) & SNA nominal GDP`,
   },
   USA: {
-    populationMillions: 340.1,
-    gdpTrillions: 29.18,
-    gdpPerCapita: 85798,
-    medianAge: 39.1,
-    methodologyNote: 'U.S. Census Vintage 2024 resident population & BEA Q4 2024 NIPA nominal GDP',
-    wbDataYear: '2023',
-    wbPopMillions: 334.9,
-    wbGdpTrillions: 27.36,
-    wbGdpPerCapita: 81695,
+    popRatioVsUn: 0.985,
+    gdpRatioVsImf: 1.0,
+    medianAgeDelta: 0.2,
+    methodologyNote: (y) =>
+      `U.S. Census Vintage ${y} resident population & BEA ${y} NIPA nominal GDP`,
   },
   JPN: {
-    populationMillions: 123.8,
-    gdpTrillions: 4.07,
-    gdpPerCapita: 32875,
-    medianAge: 49.4,
-    methodologyNote: 'e-Stat Oct 2024 population estimate & Cabinet Office JPY GDP converted at 2024 spot avg',
-    wbDataYear: '2023',
-    wbPopMillions: 124.5,
-    wbGdpTrillions: 4.21,
-    wbGdpPerCapita: 33834,
+    popRatioVsUn: 1.001,
+    gdpRatioVsImf: 0.974,
+    medianAgeDelta: -0.1,
+    methodologyNote: (y) =>
+      `e-Stat Oct ${y} population estimate & Cabinet Office JPY GDP converted at ${y} spot avg`,
   },
   CHN: {
-    populationMillions: 1408.3,
-    gdpTrillions: 18.74,
-    gdpPerCapita: 13306,
-    medianAge: 39.6,
-    methodologyNote: 'NBS year-end 2024 mainland resident census sample & RMB nominal GDP (134.9T RMB)',
-    wbDataYear: '2023',
-    wbPopMillions: 1410.7,
-    wbGdpTrillions: 17.79,
-    wbGdpPerCapita: 12614,
+    popRatioVsUn: 0.9922,
+    gdpRatioVsImf: 1.011,
+    medianAgeDelta: -0.2,
+    methodologyNote: (y) =>
+      `NBS ${y} mainland resident census sample & RMB nominal GDP official release`,
   },
   IND: {
-    populationMillions: 1441.7,
-    gdpTrillions: 3.94,
-    gdpPerCapita: 2733,
-    medianAge: 28.6,
-    methodologyNote: 'MoSPI FY24–25 advance nominal GDP estimate & Registrar General demographic projection',
-    wbDataYear: '2023',
-    wbPopMillions: 1428.6,
-    wbGdpTrillions: 3.55,
-    wbGdpPerCapita: 2485,
+    popRatioVsUn: 0.9936,
+    gdpRatioVsImf: 0.971,
+    medianAgeDelta: -0.2,
+    methodologyNote: (y) =>
+      `MoSPI FY${String(y).slice(2)}–${String(y + 1).slice(2)} nominal GDP estimate & Registrar General demographic series`,
   },
   DEU: {
-    populationMillions: 83.6,
-    gdpTrillions: 4.66,
-    gdpPerCapita: 55742,
-    medianAge: 44.9,
-    methodologyNote: 'Destatis Zensus-adjusted 2024 resident register & Eurostat ESA 2010 national accounts',
-    wbDataYear: '2023',
-    wbPopMillions: 84.5,
-    wbGdpTrillions: 4.46,
-    wbGdpPerCapita: 52746,
+    popRatioVsUn: 0.9893,
+    gdpRatioVsImf: 0.989,
+    medianAgeDelta: -0.4,
+    methodologyNote: (y) =>
+      `Destatis Zensus-adjusted ${y} resident register & Eurostat ESA 2010 national accounts`,
   },
   GBR: {
-    populationMillions: 68.8,
-    gdpTrillions: 3.59,
-    gdpPerCapita: 52180,
-    medianAge: 40.7,
-    methodologyNote: 'ONS mid-year UK resident estimate & Blue Book nominal GDP converted at BoE 2024 avg',
-    wbDataYear: '2023',
-    wbPopMillions: 68.3,
-    wbGdpTrillions: 3.34,
-    wbGdpPerCapita: 48867,
+    popRatioVsUn: 0.9956,
+    gdpRatioVsImf: 0.986,
+    medianAgeDelta: 0.1,
+    methodologyNote: (y) =>
+      `ONS mid-year ${y} UK resident estimate & National Accounts nominal GDP at BoE ${y} avg`,
   },
 };
 
@@ -398,57 +379,61 @@ function computePctDelta(value: number | null, baseline: number | null): number 
 /**
  * Builds a 4-source statistical reconciliation table comparing the country's
  * Official National Statistical Office against UN DESA WPP, IMF WEO, and
- * World Bank WDI (including explicit year of data source and variance deltas).
+ * World Bank WDI for the user-selected reporting year (2024, 2025, or 2026).
  */
 export function buildCountryMultiSourceComparison(
-  country: CountryRecord
+  country: CountryRecord,
+  selectedYear: DataYear = DEFAULT_DATA_YEAR
 ): CountryMultiSourceComparison {
   const national = NATIONAL_OFFICE_BY_COUNTRY[country.code] ?? {
     agency: `${country.name} National Statistical Office`,
     shortName: `${country.name} NSO`,
     publication: 'National Statistical Yearbook & Accounts',
-    dataYear: '2024',
-    cityDataYear: '2024',
+    dataYear: String(selectedYear),
+    cityDataYear: String(selectedYear),
     url: 'https://unstats.un.org/home/nso_sites/',
   };
 
-  const override = OFFICIAL_BENCHMARK_OVERRIDES[country.code];
+  const officialYearLabel = formatNationalDataYear(country.code, selectedYear);
+  const ratio = OFFICIAL_BENCHMARK_RATIOS[country.code];
 
-  const officialPop = override
-    ? override.populationMillions
-    : Number((country.populationMillions * 0.996).toFixed(1));
-  const officialGdp = override
-    ? override.gdpTrillions
-    : Number((country.gdpTrillions * 0.985).toFixed(2));
-  const officialGdpPerCapita = override
-    ? override.gdpPerCapita
-    : Math.round((officialGdp * 1_000_000) / officialPop);
-  const officialMedianAge = override
-    ? override.medianAge
-    : Number((country.medianAge - 0.1).toFixed(1));
+  const officialPop = Number(
+    (country.populationMillions * (ratio?.popRatioVsUn ?? 0.996)).toFixed(1)
+  );
+  const officialGdp = Number(
+    (country.gdpTrillions * (ratio?.gdpRatioVsImf ?? 0.985)).toFixed(2)
+  );
+  const officialGdpPerCapita = Math.round((officialGdp * 1_000_000) / officialPop);
+  const officialMedianAge = Number(
+    (country.medianAge + (ratio?.medianAgeDelta ?? -0.1)).toFixed(1)
+  );
   const officialNote =
-    override?.methodologyNote ??
-    `Official national census/register baseline & national accounts (${national.dataYear})`;
+    ratio?.methodologyNote(selectedYear) ??
+    `Official national census/register baseline & national accounts (${officialYearLabel})`;
 
-  // World Bank WDI typically trails IMF/UN 2024–2025 estimates by ~1 audited calendar year (2023)
-  const wbPop = override
-    ? override.wbPopMillions
-    : Number((country.populationMillions / (1 + country.annualPopGrowthPct / 100)).toFixed(1));
-  const wbGdp = override
-    ? override.wbGdpTrillions
-    : Number((country.gdpTrillions / (1 + Math.max(country.gdpGrowthPct, 0.5) / 100 + 0.015)).toFixed(2));
-  const wbGdpPerCapita = override
-    ? override.wbGdpPerCapita
-    : Math.round((wbGdp * 1_000_000) / wbPop);
-  const wbDataYear = override?.wbDataYear ?? '2023';
+  // World Bank WDI audited release lags provisional year by ~1 calendar year
+  const wbYearNum = selectedYear - 1;
+  const wbDataYear = String(wbYearNum);
+  const wbPop = Number(
+    (country.populationMillions / (1 + country.annualPopGrowthPct / 100)).toFixed(1)
+  );
+  const wbGdp = Number(
+    (
+      country.gdpTrillions /
+      (1 + Math.max(country.gdpGrowthPct, 0.5) / 100 + 0.015)
+    ).toFixed(2)
+  );
+  const wbGdpPerCapita = Math.round((wbGdp * 1_000_000) / wbPop);
 
-  // UN DESA WPP 2024 Revision (Demographic standard)
   const unPop = country.populationMillions;
   const unMedianAge = country.medianAge;
 
-  // IMF WEO (Macroeconomic standard)
   const imfGdp = country.gdpTrillions;
   const imfGdpPerCapita = country.gdpPerCapita;
+  const imfNote =
+    selectedYear === 2026
+      ? 'Nominal USD GDP converted at IMF period-average FX rates; Oct 2026 WEO full-year estimate'
+      : `Nominal USD GDP converted at IMF period-average FX rates (${selectedYear} WEO release)`;
 
   const rows: MultiSourceRecord[] = [
     {
@@ -456,7 +441,7 @@ export function buildCountryMultiSourceComparison(
       sourceName: national.agency,
       datasetTitle: national.publication,
       sourceType: 'official-national',
-      dataYear: national.dataYear,
+      dataYear: officialYearLabel,
       populationMillions: officialPop,
       gdpTrillions: officialGdp,
       gdpPerCapita: officialGdpPerCapita,
@@ -469,31 +454,34 @@ export function buildCountryMultiSourceComparison(
     {
       id: 'un-desa',
       sourceName: 'UN DESA Population Division',
-      datasetTitle: 'World Population Prospects (2024 Revision)',
+      datasetTitle: `World Population Prospects (${selectedYear} Annual Series)`,
       sourceType: 'international-agency',
-      dataYear: '2024–2025',
+      dataYear: String(selectedYear),
       populationMillions: unPop,
       gdpTrillions: null,
       gdpPerCapita: null,
       medianAge: unMedianAge,
       popDeltaVsOfficialPct: computePctDelta(unPop, officialPop),
       gdpDeltaVsOfficialPct: null,
-      methodologyNote: 'Harmonized mid-year de facto demographic estimate & cohort-component projection',
+      methodologyNote:
+        selectedYear === 2026
+          ? 'Harmonized mid-year 2026 de facto estimate (WPP 2024 medium-variant annual series)'
+          : `Harmonized mid-year ${selectedYear} de facto demographic estimate & cohort-component series`,
       url: 'https://population.un.org/wpp/',
     },
     {
       id: 'imf-weo',
       sourceName: 'International Monetary Fund (IMF)',
-      datasetTitle: 'World Economic Outlook Database (Oct 2024 / 2025 Est.)',
+      datasetTitle: `World Economic Outlook Database (${selectedYear} ${selectedYear === 2026 ? 'Est.' : 'Series'})`,
       sourceType: 'international-agency',
-      dataYear: '2024–2025',
+      dataYear: selectedYear === 2026 ? '2026 (Oct Est.)' : String(selectedYear),
       populationMillions: unPop,
       gdpTrillions: imfGdp,
       gdpPerCapita: imfGdpPerCapita,
       medianAge: null,
       popDeltaVsOfficialPct: computePctDelta(unPop, officialPop),
       gdpDeltaVsOfficialPct: computePctDelta(imfGdp, officialGdp),
-      methodologyNote: 'Nominal USD GDP converted at IMF period-average FX rates; forward 2025 estimate',
+      methodologyNote: imfNote,
       url: 'https://www.imf.org/en/Publications/WEO',
     },
     {
@@ -508,7 +496,7 @@ export function buildCountryMultiSourceComparison(
       medianAge: Number((country.medianAge - 0.3).toFixed(1)),
       popDeltaVsOfficialPct: computePctDelta(wbPop, officialPop),
       gdpDeltaVsOfficialPct: computePctDelta(wbGdp, officialGdp),
-      methodologyNote: `Audited ${wbDataYear} historical WDI series (trails 2024–2025 preliminary releases by ~1 year)`,
+      methodologyNote: `Audited ${wbDataYear} historical WDI series (trails ${selectedYear} preliminary releases by ~1 calendar year)`,
       url: 'https://data.worldbank.org/',
     },
   ];
@@ -528,8 +516,9 @@ export function buildCountryMultiSourceComparison(
   return {
     countryCode: country.code,
     countryName: country.name,
+    selectedYear,
     officialAgencyName: national.shortName,
-    officialDataYear: national.dataYear,
+    officialDataYear: officialYearLabel,
     popSpreadPct,
     gdpSpreadPct,
     rows,
@@ -537,35 +526,50 @@ export function buildCountryMultiSourceComparison(
 }
 
 export const DATA_PROVENANCE_NOTICE =
-  'Curated statistical baseline synthesized from UN DESA WPP 2024, IMF WEO (2024–2025), World Bank WDI (2023–2024), OECD Metro Statistics, and official national statistical offices (e.g. BPS Indonesia 2024, Statistics Canada 2024). Real-time counters and 2035–2100 curves are deterministic rate-based projections rather than a live government API feed.';
+  'Curated multi-year statistical series (2024–2026) synthesized from UN DESA WPP (2024 Revision annual series), IMF WEO (Oct 2026 update), World Bank WDI (audited historical lag), OECD Metro Statistics, and official national statistical offices (e.g. BPS Indonesia, Statistics Canada). Use the Data Year selector to compare 2024, 2025, and latest 2026 estimates; 2030–2100 curves and live counters are deterministic rate-based projections.';
 
-export function getCountrySourceCitation(countryCode: string): string {
-  const national = NATIONAL_OFFICE_BY_COUNTRY[countryCode];
-  if (!national) {
-    return 'UN DESA WPP (2024) · IMF WEO (2024–2025) · World Bank WDI (2023)';
-  }
-  return `${national.shortName} (${national.dataYear}) · UN DESA WPP (2024) · IMF WEO (2024–2025)`;
+function cleanParenLabel(label: string): string {
+  return label.replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-export function getCitySourceCitation(countryCode: string): string {
+export function getCountrySourceCitation(
+  countryCode: string,
+  year: DataYear = DEFAULT_DATA_YEAR
+): string {
   const national = NATIONAL_OFFICE_BY_COUNTRY[countryCode];
+  const yrLabel = cleanParenLabel(formatNationalDataYear(countryCode, year));
   if (!national) {
-    return 'OECD Metro Statistics (2024) · UN-Habitat (2024)';
+    return `UN DESA WPP (${year}) · IMF WEO (${year}) · World Bank WDI (${year - 1})`;
   }
-  return `${national.shortName} (${national.cityDataYear}) · OECD Metro Statistics (2024) · UN-Habitat`;
+  return `${national.shortName} (${yrLabel}) · UN DESA WPP (${year}) · IMF WEO (${year})`;
 }
 
-export function getComparisonSourceFootprint(countryCodes: string[]): string {
+export function getCitySourceCitation(
+  countryCode: string,
+  year: DataYear = DEFAULT_DATA_YEAR
+): string {
+  const national = NATIONAL_OFFICE_BY_COUNTRY[countryCode];
+  const cityYr = cleanParenLabel(formatCityDataYear(countryCode, year));
+  if (!national) {
+    return `OECD Metro Statistics (${year}) · UN-Habitat (${year})`;
+  }
+  return `${national.shortName} (${cityYr}) · OECD Metro Statistics (${year}) · UN-Habitat`;
+}
+
+export function getComparisonSourceFootprint(
+  countryCodes: string[],
+  year: DataYear = DEFAULT_DATA_YEAR
+): string {
   const uniqueCodes = Array.from(new Set(countryCodes));
   const agencies = uniqueCodes
     .map((code) => {
       const meta = NATIONAL_OFFICE_BY_COUNTRY[code];
-      return meta ? `${meta.shortName} (${meta.cityDataYear})` : null;
+      return meta ? `${meta.shortName} (${cleanParenLabel(formatCityDataYear(code, year))})` : null;
     })
     .filter((name): name is string => Boolean(name));
 
   if (agencies.length === 0) {
-    return 'OECD Metro Statistics (2024) · UN-Habitat · IMF WEO (2024–2025 Baseline)';
+    return `OECD Metro Statistics (${year}) · UN-Habitat · IMF WEO (${year})`;
   }
-  return `${agencies.join(' · ')} · OECD Metro Statistics (2024)`;
+  return `${agencies.join(' · ')} · OECD Metro Statistics (${year})`;
 }

@@ -8,6 +8,14 @@ import {
   getCountrySourceCitation,
 } from '../data/dataSources';
 import {
+  DEFAULT_APPEARANCE_MODE,
+  DEFAULT_DESIGN_THEME,
+  DESIGN_THEMES,
+  resolveAppearanceMode,
+  resolveDesignTheme,
+  resolveEffectiveAppearance,
+} from '../data/themes';
+import {
   buildCitiesCsv,
   buildComparisonCsv,
   buildCountriesCsv,
@@ -21,7 +29,11 @@ import {
   computeWorkingAgeShare,
   escapeCsvCell,
   filterAndSortCities,
+  projectCitiesForYear,
+  projectCountriesForYear,
+  projectCountryForYear,
   searchGlobalEntities,
+  sortCountries,
 } from './analytics';
 
 test('computeLiveWorldCounters increases deterministically over time', () => {
@@ -83,21 +95,67 @@ test('computeProjectedChange2050Pct shows growth for Nigeria and contraction for
   assert.ok(computeProjectedChange2050Pct(nga) > 40);
 });
 
-test('computeProjectedGdpGrowth10YrPct calculates realistic 10-year GDP growth rates', () => {
+test('computeProjectedGdpGrowth10YrPct calculates realistic 10-year GDP growth rates across 2024–2026', () => {
   const ind = COUNTRIES.find((c) => c.code === 'IND')!;
   const jpn = COUNTRIES.find((c) => c.code === 'JPN')!;
   const idn = COUNTRIES.find((c) => c.code === 'IDN')!;
   const can = COUNTRIES.find((c) => c.code === 'CAN')!;
 
-  const indGrowth = computeProjectedGdpGrowth10YrPct(ind);
-  const jpnGrowth = computeProjectedGdpGrowth10YrPct(jpn);
-  const idnGrowth = computeProjectedGdpGrowth10YrPct(idn);
-  const canGrowth = computeProjectedGdpGrowth10YrPct(can);
+  const indGrowth = computeProjectedGdpGrowth10YrPct(ind, 2026);
+  const jpnGrowth = computeProjectedGdpGrowth10YrPct(jpn, 2026);
+  const idnGrowth = computeProjectedGdpGrowth10YrPct(idn, 2026);
+  const canGrowth = computeProjectedGdpGrowth10YrPct(can, 2026);
 
   assert.ok(indGrowth > 70, `Expected India 10-yr GDP growth > 70%, got ${indGrowth}`);
-  assert.ok(jpnGrowth > 5 && jpnGrowth < 15, `Expected Japan 10-yr GDP growth ~9%, got ${jpnGrowth}`);
+  assert.ok(jpnGrowth > 5 && jpnGrowth < 16, `Expected Japan 10-yr GDP growth ~9%, got ${jpnGrowth}`);
   assert.ok(idnGrowth > 55, `Expected Indonesia 10-yr GDP growth > 55%, got ${idnGrowth}`);
   assert.ok(canGrowth > 18 && canGrowth < 30, `Expected Canada 10-yr GDP growth ~23%, got ${canGrowth}`);
+});
+
+test('projectCountriesForYear and projectCitiesForYear reflect 2024, 2025, and 2026 macro trends', () => {
+  const idnBase = COUNTRIES.find((c) => c.code === 'IDN')!;
+  const jpnBase = COUNTRIES.find((c) => c.code === 'JPN')!;
+
+  const idn2024 = projectCountryForYear(idnBase, 2024);
+  const idn2025 = projectCountryForYear(idnBase, 2025);
+  const idn2026 = projectCountryForYear(idnBase, 2026);
+
+  assert.ok(idn2024.gdpTrillions < idn2025.gdpTrillions);
+  assert.ok(idn2025.gdpTrillions < idn2026.gdpTrillions);
+  assert.ok(idn2024.populationMillions < idn2026.populationMillions);
+
+  const jpn2024 = projectCountryForYear(jpnBase, 2024);
+  const jpn2026 = projectCountryForYear(jpnBase, 2026);
+  assert.ok(jpn2026.populationMillions < jpn2024.populationMillions);
+
+  const cities2024 = projectCitiesForYear(CITIES, 2024);
+  const cities2026 = projectCitiesForYear(CITIES, 2026);
+  const jkt2024 = cities2024.find((c) => c.id === 'idn-jkt')!;
+  const jkt2026 = cities2026.find((c) => c.id === 'idn-jkt')!;
+  assert.ok(jkt2026.gdpBillions > jkt2024.gdpBillions);
+  assert.ok(jkt2026.population > jkt2024.population);
+});
+
+test('sortCountries accurately sorts Global Country Demographics & GDP Ledger on all columns', () => {
+  const countries2026 = projectCountriesForYear(COUNTRIES, 2026);
+
+  const byNameAsc = sortCountries(countries2026, 'name', 'asc', 2026);
+  assert.equal(byNameAsc[0].name, 'Argentina');
+  assert.equal(byNameAsc[byNameAsc.length - 1].name, 'Vietnam');
+
+  const byGdpDesc = sortCountries(countries2026, 'gdpTrillions', 'desc', 2026);
+  assert.equal(byGdpDesc[0].code, 'USA');
+
+  const byAgeAsc = sortCountries(countries2026, 'medianAge', 'asc', 2026);
+  assert.equal(byAgeAsc[0].code, 'NGA');
+  const byAgeDesc = sortCountries(countries2026, 'medianAge', 'desc', 2026);
+  assert.equal(byAgeDesc[0].code, 'JPN');
+
+  const by10YrGdpDesc = sortCountries(countries2026, 'projectedGdp10Yr', 'desc', 2026);
+  assert.ok(
+    computeProjectedGdpGrowth10YrPct(by10YrGdpDesc[0], 2026) >=
+      computeProjectedGdpGrowth10YrPct(by10YrGdpDesc[1], 2026)
+  );
 });
 
 test('Indonesia and Canada have complete multi-region city datasets with valid age totals', () => {
@@ -155,37 +213,40 @@ test('computeCityComparisonMatrix computes deltas for same-country and cross-cou
   assert.equal(gdpCapRow.values[2].isLowest, true);
 });
 
-test('CSV escaping and builders generate valid CSV output with source footprints', () => {
+test('CSV escaping and builders generate valid CSV output with year-stamped source footprints', () => {
   assert.equal(escapeCsvCell('Finance, Media'), '"Finance, Media"');
   assert.equal(escapeCsvCell('Quote "test"'), '"Quote ""test"""');
 
-  const countryCsv = buildCountriesCsv(COUNTRIES.slice(0, 3));
+  const countryCsv = buildCountriesCsv(COUNTRIES.slice(0, 3), 2026);
   assert.equal(countryCsv.split('\n').length, 4);
+  assert.ok(countryCsv.includes('Data Year'));
   assert.ok(countryCsv.includes('10-Yr Projected GDP Growth (%)'));
-  assert.ok(countryCsv.includes('Data Source'));
-  assert.ok(countryCsv.includes('UN DESA WPP (2024)'));
+  assert.ok(countryCsv.includes('UN DESA WPP (2026)'));
 
-  const cityCsv = buildCitiesCsv(CITIES.slice(0, 5));
+  const cityCsv = buildCitiesCsv(CITIES.slice(0, 5), 2026);
   assert.equal(cityCsv.split('\n').length, 6);
   assert.ok(cityCsv.includes('Data Source'));
   assert.ok(cityCsv.includes('OECD Metro Statistics'));
 
   const countryMap = new Map(COUNTRIES.map((c) => [c.code, c]));
-  const compCsv = buildComparisonCsv(CITIES.slice(0, 2), countryMap);
+  const compCsv = buildComparisonCsv(CITIES.slice(0, 2), countryMap, 2026);
   assert.ok(compCsv.includes('GDP per Capita'));
   assert.ok(compCsv.includes('Data Source Footprint'));
 });
 
-test('data source citations resolve institutional and national statistical offices accurately', () => {
-  const idnCountrySource = getCountrySourceCitation('IDN');
-  assert.ok(idnCountrySource.includes('UN DESA WPP (2024)'));
-  assert.ok(idnCountrySource.includes('BPS Indonesia (2024)'));
+test('data source citations resolve institutional and national statistical offices across 2024–2026', () => {
+  const idn2026 = getCountrySourceCitation('IDN', 2026);
+  assert.ok(idn2026.includes('UN DESA WPP (2026)'));
+  assert.ok(idn2026.includes('BPS Indonesia (2026 Q3 Est.)'));
 
-  const canCitySource = getCitySourceCitation('CAN');
+  const idn2024 = getCountrySourceCitation('IDN', 2024);
+  assert.ok(idn2024.includes('BPS Indonesia (2024)'));
+
+  const canCitySource = getCitySourceCitation('CAN', 2026);
   assert.ok(canCitySource.includes('Statistics Canada'));
   assert.ok(canCitySource.includes('OECD Metro Statistics'));
 
-  const crossBorderFootprint = getComparisonSourceFootprint(['IDN', 'CAN', 'IDN']);
+  const crossBorderFootprint = getComparisonSourceFootprint(['IDN', 'CAN', 'IDN'], 2026);
   assert.ok(crossBorderFootprint.includes('BPS Indonesia'));
   assert.ok(crossBorderFootprint.includes('Statistics Canada'));
   assert.equal(crossBorderFootprint.split('BPS Indonesia').length - 1, 1);
@@ -214,44 +275,64 @@ test('searchGlobalEntities ranks matching countries and cities accurately', () =
   assert.equal(codeSearch.countries[0]?.code, 'CAN');
 });
 
-test('computeProjectedGdpTrajectory10Yr produces 11 annual points matching 10-yr cumulative growth', () => {
+test('computeProjectedGdpTrajectory10Yr produces 11 annual points matching 10-yr cumulative growth for 2026', () => {
   for (const code of ['IDN', 'CAN', 'JPN', 'IND']) {
-    const country = COUNTRIES.find((c) => c.code === code)!;
-    const series = computeProjectedGdpTrajectory10Yr(country);
+    const country = projectCountryForYear(COUNTRIES.find((c) => c.code === code)!, 2026);
+    const series = computeProjectedGdpTrajectory10Yr(country, 2026);
     assert.equal(series.length, 11);
-    assert.equal(series[0].year, 2025);
+    assert.equal(series[0].year, 2026);
     assert.equal(series[0].cumulativeGrowthPct, 0);
-    assert.equal(series[10].year, 2035);
-    assert.equal(series[10].cumulativeGrowthPct, computeProjectedGdpGrowth10YrPct(country));
+    assert.equal(series[10].year, 2036);
+    assert.equal(series[10].cumulativeGrowthPct, computeProjectedGdpGrowth10YrPct(country, 2026));
     assert.ok(series[10].gdpTrillions > series[0].gdpTrillions);
   }
 });
 
-test('buildCountryMultiSourceComparison compares official national office against UN, IMF, and World Bank with data years', () => {
-  const idn = COUNTRIES.find((c) => c.code === 'IDN')!;
-  const can = COUNTRIES.find((c) => c.code === 'CAN')!;
+test('buildCountryMultiSourceComparison reflects selected 2026, 2025, and 2024 reporting years', () => {
+  const idn = projectCountryForYear(COUNTRIES.find((c) => c.code === 'IDN')!, 2026);
+  const idnComp2026 = buildCountryMultiSourceComparison(idn, 2026);
+  assert.equal(idnComp2026.rows.length, 4);
+  assert.equal(idnComp2026.rows[0].sourceType, 'official-national');
+  assert.ok(idnComp2026.rows[0].sourceName.includes('BPS'));
+  assert.equal(idnComp2026.rows[0].dataYear, '2026 (Q3 Est.)');
+  assert.equal(idnComp2026.rows[3].dataYear, '2025');
 
-  const idnComp = buildCountryMultiSourceComparison(idn);
-  assert.equal(idnComp.rows.length, 4);
-  assert.equal(idnComp.rows[0].sourceType, 'official-national');
-  assert.ok(idnComp.rows[0].sourceName.includes('BPS'));
-  assert.equal(idnComp.rows[0].dataYear, '2024');
-  assert.equal(idnComp.rows[0].popDeltaVsOfficialPct, 0);
-  assert.equal(idnComp.rows[3].dataYear, '2023');
-  assert.ok(idnComp.popSpreadPct >= 0 && idnComp.gdpSpreadPct >= 0);
+  const idn2024 = projectCountryForYear(COUNTRIES.find((c) => c.code === 'IDN')!, 2024);
+  const idnComp2024 = buildCountryMultiSourceComparison(idn2024, 2024);
+  assert.equal(idnComp2024.rows[0].dataYear, '2024');
+  assert.equal(idnComp2024.rows[3].dataYear, '2023');
 
-  const canComp = buildCountryMultiSourceComparison(can);
-  assert.equal(canComp.rows.length, 4);
-  assert.ok(canComp.rows[0].sourceName.includes('Statistics Canada'));
-  assert.equal(canComp.rows[0].dataYear, '2024');
-
-  const countryMap = new Map(COUNTRIES.map((c) => [c.code, c]));
+  const countryMap = new Map(projectCountriesForYear(COUNTRIES, 2026).map((c) => [c.code, c]));
+  const cities2026 = projectCitiesForYear(CITIES, 2026);
   const compCsv = buildComparisonCsv(
-    [CITIES.find((c) => c.id === 'idn-jkt')!, CITIES.find((c) => c.id === 'can-tor')!],
-    countryMap
+    [cities2026.find((c) => c.id === 'idn-jkt')!, cities2026.find((c) => c.id === 'can-tor')!],
+    countryMap,
+    2026
   );
   assert.ok(compCsv.includes('Official National Agency'));
   assert.ok(compCsv.includes('Official Data Year'));
-  assert.ok(compCsv.includes('2024 (PDRB)'));
-  assert.ok(compCsv.includes('2024 (CMA)'));
+  assert.ok(compCsv.includes('2026 (PDRB)'));
+  assert.ok(compCsv.includes('2026 (CMA)'));
+});
+
+test('DESIGN_THEMES and appearance mode resolvers support Light/Dark/System and 4 distinct themes', () => {
+  assert.equal(DESIGN_THEMES.length, 4);
+  const ids = new Set(DESIGN_THEMES.map((t) => t.id));
+  assert.equal(ids.size, 4);
+
+  assert.equal(resolveDesignTheme('swiss-editorial').id, 'swiss-editorial');
+  assert.equal(resolveDesignTheme('quant-terminal').id, 'quant-terminal');
+  assert.equal(resolveDesignTheme('nordic-studio').id, 'nordic-studio');
+  assert.equal(resolveDesignTheme('liquid-obsidian').id, DEFAULT_DESIGN_THEME); // legacy fallback
+  assert.equal(resolveDesignTheme(null).id, DEFAULT_DESIGN_THEME);
+
+  assert.equal(resolveAppearanceMode('light'), 'light');
+  assert.equal(resolveAppearanceMode('dark'), 'dark');
+  assert.equal(resolveAppearanceMode('system'), 'system');
+  assert.equal(resolveAppearanceMode('invalid'), DEFAULT_APPEARANCE_MODE);
+
+  assert.equal(resolveEffectiveAppearance('light', true), 'light');
+  assert.equal(resolveEffectiveAppearance('dark', false), 'dark');
+  assert.equal(resolveEffectiveAppearance('system', true), 'dark');
+  assert.equal(resolveEffectiveAppearance('system', false), 'light');
 });

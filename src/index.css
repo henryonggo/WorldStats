@@ -2,17 +2,410 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  /* ==========================================================================
+     1. BASE SEMANTIC TOKENS — LIGHT APPEARANCE DEFAULTS
+     ========================================================================== */
   :root {
     --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* Typography & Semantic Signals (Light WCAG AA) */
+    --ws-text: #0f172a;
+    --ws-text-2: #334155;
+    --ws-text-muted: #526071;
+    --ws-accent: #0369a1;
+    --ws-accent-hover: #075985;
+    --ws-positive: #047857;
+    --ws-negative: #be123c;
+    --ws-warm: #b45309;
+    --ws-violet: #6d28d9;
+
+    /* Interactive States */
+    --ws-hover: rgba(15, 23, 42, 0.045);
+    --ws-selected: rgba(15, 23, 42, 0.08);
+    --ws-subtle-btn-bg: rgba(15, 23, 42, 0.04);
+    --ws-subtle-btn-hover: rgba(15, 23, 42, 0.08);
+
+    /* Geometry & Material Defaults */
+    --ws-radius: 12px;
+    --ws-radius-sm: 8px;
+    --ws-blur: 0px;
+    --ws-blur-header: 0px;
+    --ws-blur-popover: 0px;
+    --ws-specular: transparent;
+
+    /* Charts & Cartography (Light) */
+    --ws-chart-tick: #475569;
+    --ws-chart-axis: #cbd5e1;
+    --ws-grid-stroke: rgba(15, 23, 42, 0.09);
+    --ws-map-untracked: #d8e1ec;
+    --ws-map-stroke: #ffffff;
+    --ws-map-selected-stroke: #0f172a;
+    --ws-scroll-thumb: rgba(15, 23, 42, 0.22);
+    --ws-scroll-thumb-hover: rgba(15, 23, 42, 0.36);
+
+    /* Default Theme (Liquid Glass — Light) */
+    --ws-canvas-bg: #eaf1fa;
+    --ws-canvas-pattern:
+      radial-gradient(ellipse 60% 50% at 14% 8%, rgba(56, 189, 248, 0.24) 0%, transparent 66%),
+      radial-gradient(ellipse 55% 48% at 88% 12%, rgba(99, 102, 241, 0.18) 0%, transparent 68%),
+      radial-gradient(ellipse 52% 45% at 74% 86%, rgba(14, 165, 233, 0.16) 0%, transparent 70%),
+      radial-gradient(ellipse 46% 42% at 24% 80%, rgba(16, 185, 129, 0.12) 0%, transparent 68%);
+    --ws-canvas-size: auto;
+
+    --ws-panel-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.78) 0%, rgba(246, 250, 255, 0.68) 100%);
+    --ws-sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.80) 0%, rgba(242, 247, 253, 0.86) 100%);
+    --ws-header-bg: rgba(255, 255, 255, 0.76);
+    --ws-subpanel-bg: rgba(241, 246, 253, 0.72);
+    --ws-inset-bg: rgba(241, 246, 252, 0.66);
+    --ws-footnote-bg: rgba(244, 248, 253, 0.74);
+    --ws-popover-bg: rgba(255, 255, 255, 0.94);
+    --ws-modal-bg: linear-gradient(155deg, rgba(255, 255, 255, 0.95) 0%, rgba(244, 249, 255, 0.96) 100%);
+    --ws-input-bg: rgba(255, 255, 255, 0.82);
+    --ws-option-bg: #ffffff;
+
+    --ws-border: rgba(15, 23, 42, 0.11);
+    --ws-border-strong: rgba(2, 132, 199, 0.28);
+    --ws-divider: rgba(15, 23, 42, 0.08);
+    --ws-specular: rgba(255, 255, 255, 0.85);
+    --ws-shadow: 0 12px 32px -14px rgba(15, 23, 42, 0.14), 0 1px 2px rgba(15, 23, 42, 0.05);
+    --ws-shadow-popover: 0 20px 44px -12px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.06);
+
+    --ws-active-bg: rgba(2, 132, 199, 0.12);
+    --ws-active-border: rgba(2, 132, 199, 0.34);
+    --ws-active-text: #0369a1;
+    --ws-cta-bg: #0284c7;
+    --ws-cta-hover: #0369a1;
+    --ws-cta-text: #ffffff;
+
+    --ws-radius: 14px;
+    --ws-radius-sm: 10px;
+    --ws-blur: 22px;
+    --ws-blur-header: 26px;
+    --ws-blur-popover: 28px;
   }
 
+  /* ==========================================================================
+     2. DARK APPEARANCE OVERRIDES (SHARED SIGNALS + LIQUID GLASS DARK)
+     ========================================================================== */
+  html.dark {
+    --ws-text: #f1f5f9;
+    --ws-text-2: #cbd5e1;
+    --ws-text-muted: #94a3b8;
+    --ws-accent: #7dd3fc;
+    --ws-accent-hover: #bae6fd;
+    --ws-positive: #34d399;
+    --ws-negative: #fb7185;
+    --ws-warm: #fcd34d;
+    --ws-violet: #c4b5fd;
+
+    --ws-hover: rgba(255, 255, 255, 0.055);
+    --ws-selected: rgba(255, 255, 255, 0.10);
+    --ws-subtle-btn-bg: rgba(255, 255, 255, 0.04);
+    --ws-subtle-btn-hover: rgba(255, 255, 255, 0.09);
+
+    --ws-chart-tick: #94a3b8;
+    --ws-chart-axis: #334155;
+    --ws-grid-stroke: rgba(148, 163, 184, 0.16);
+    --ws-map-untracked: #162032;
+    --ws-map-stroke: #0b111d;
+    --ws-map-selected-stroke: #f8fafc;
+    --ws-scroll-thumb: rgba(148, 163, 184, 0.28);
+    --ws-scroll-thumb-hover: rgba(148, 163, 184, 0.44);
+
+    /* Liquid Glass — Dark */
+    --ws-canvas-bg: #050a14;
+    --ws-canvas-pattern:
+      radial-gradient(ellipse 60% 50% at 14% 8%, rgba(56, 189, 248, 0.24) 0%, transparent 66%),
+      radial-gradient(ellipse 55% 48% at 88% 12%, rgba(37, 99, 235, 0.22) 0%, transparent 68%),
+      radial-gradient(ellipse 52% 45% at 72% 86%, rgba(14, 165, 233, 0.14) 0%, transparent 70%),
+      radial-gradient(ellipse 46% 42% at 24% 78%, rgba(99, 102, 241, 0.15) 0%, transparent 68%);
+    --ws-canvas-size: auto;
+
+    --ws-panel-bg: linear-gradient(145deg, rgba(22, 34, 56, 0.62) 0%, rgba(11, 18, 33, 0.54) 100%);
+    --ws-sidebar-bg: linear-gradient(180deg, rgba(13, 22, 39, 0.74) 0%, rgba(8, 14, 26, 0.80) 100%);
+    --ws-header-bg: rgba(8, 15, 29, 0.70);
+    --ws-subpanel-bg: rgba(9, 15, 28, 0.50);
+    --ws-inset-bg: rgba(7, 13, 24, 0.58);
+    --ws-footnote-bg: rgba(7, 12, 23, 0.56);
+    --ws-popover-bg: rgba(10, 18, 34, 0.90);
+    --ws-modal-bg: linear-gradient(155deg, rgba(19, 31, 52, 0.88) 0%, rgba(9, 16, 30, 0.92) 100%);
+    --ws-input-bg: rgba(8, 14, 27, 0.66);
+    --ws-option-bg: #0c1424;
+
+    --ws-border: rgba(255, 255, 255, 0.12);
+    --ws-border-strong: rgba(186, 230, 253, 0.24);
+    --ws-divider: rgba(255, 255, 255, 0.08);
+    --ws-specular: rgba(255, 255, 255, 0.16);
+    --ws-shadow: 0 12px 40px -12px rgba(2, 6, 23, 0.74), 0 1px 0 0 rgba(255, 255, 255, 0.06);
+    --ws-shadow-popover: 0 22px 52px -12px rgba(2, 6, 23, 0.86);
+
+    --ws-active-bg: rgba(56, 189, 248, 0.16);
+    --ws-active-border: rgba(56, 189, 248, 0.40);
+    --ws-active-text: #7dd3fc;
+    --ws-cta-bg: #38bdf8;
+    --ws-cta-hover: #7dd3fc;
+    --ws-cta-text: #040812;
+  }
+
+  /* ==========================================================================
+     3. THEME: SWISS EDITORIAL (Flat Print Matte · Hairline Rules · Cobalt)
+     ========================================================================== */
+  html[data-design-theme="swiss-editorial"] {
+    --ws-radius: 6px;
+    --ws-radius-sm: 4px;
+    --ws-blur: 0px;
+    --ws-blur-header: 0px;
+    --ws-blur-popover: 0px;
+    --ws-specular: transparent;
+
+    --ws-canvas-bg: #f5f4f0;
+    --ws-canvas-pattern: none;
+    --ws-canvas-size: auto;
+
+    --ws-panel-bg: #ffffff;
+    --ws-sidebar-bg: #fbfaf7;
+    --ws-header-bg: #ffffff;
+    --ws-subpanel-bg: #f4f3ee;
+    --ws-inset-bg: #f8f7f3;
+    --ws-footnote-bg: #f6f5f0;
+    --ws-popover-bg: #ffffff;
+    --ws-modal-bg: #ffffff;
+    --ws-input-bg: #ffffff;
+    --ws-option-bg: #ffffff;
+
+    --ws-border: #dcdad0;
+    --ws-border-strong: #b8b5a7;
+    --ws-divider: #e7e5dd;
+    --ws-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --ws-shadow-popover: 0 12px 28px -8px rgba(15, 23, 42, 0.14);
+
+    --ws-accent: #1d4ed8;
+    --ws-accent-hover: #1e40af;
+    --ws-active-bg: #eff6ff;
+    --ws-active-border: #93c5fd;
+    --ws-active-text: #1d4ed8;
+    --ws-cta-bg: #1d4ed8;
+    --ws-cta-hover: #1e40af;
+    --ws-cta-text: #ffffff;
+    --ws-map-untracked: #e2e4e9;
+  }
+
+  html.dark[data-design-theme="swiss-editorial"] {
+    --ws-canvas-bg: #0f1115;
+    --ws-canvas-pattern: none;
+
+    --ws-panel-bg: #161920;
+    --ws-sidebar-bg: #12151b;
+    --ws-header-bg: #12151b;
+    --ws-subpanel-bg: #1c2029;
+    --ws-inset-bg: #13161d;
+    --ws-footnote-bg: #12151b;
+    --ws-popover-bg: #1b1f28;
+    --ws-modal-bg: #161920;
+    --ws-input-bg: #11141a;
+    --ws-option-bg: #161920;
+
+    --ws-border: #2a303d;
+    --ws-border-strong: #40495c;
+    --ws-divider: #222732;
+    --ws-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --ws-shadow-popover: 0 16px 36px -8px rgba(0, 0, 0, 0.65);
+
+    --ws-accent: #60a5fa;
+    --ws-accent-hover: #93c5fd;
+    --ws-active-bg: rgba(59, 130, 246, 0.14);
+    --ws-active-border: rgba(96, 165, 250, 0.42);
+    --ws-active-text: #93c5fd;
+    --ws-cta-bg: #3b82f6;
+    --ws-cta-hover: #60a5fa;
+    --ws-cta-text: #ffffff;
+    --ws-map-untracked: #1d2330;
+  }
+
+  /* ==========================================================================
+     4. THEME: QUANT GRID (Technical Blueprint Grid · Sharp 2px · Emerald)
+     ========================================================================== */
+  html[data-design-theme="quant-terminal"] {
+    --ws-radius: 2px;
+    --ws-radius-sm: 2px;
+    --ws-blur: 0px;
+    --ws-blur-header: 0px;
+    --ws-blur-popover: 0px;
+    --ws-specular: transparent;
+
+    --ws-canvas-bg: #eff4f2;
+    --ws-canvas-pattern:
+      linear-gradient(to right, rgba(4, 120, 87, 0.065) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(4, 120, 87, 0.065) 1px, transparent 1px);
+    --ws-canvas-size: 24px 24px;
+
+    --ws-panel-bg: #ffffff;
+    --ws-sidebar-bg: #f7faf9;
+    --ws-header-bg: #ffffff;
+    --ws-subpanel-bg: #eef4f2;
+    --ws-inset-bg: #f5f9f8;
+    --ws-footnote-bg: #f1f6f4;
+    --ws-popover-bg: #ffffff;
+    --ws-modal-bg: #ffffff;
+    --ws-input-bg: #ffffff;
+    --ws-option-bg: #ffffff;
+
+    --ws-border: #c5d5d0;
+    --ws-border-strong: #87aba0;
+    --ws-divider: #dce7e3;
+    --ws-shadow: none;
+    --ws-shadow-popover: 0 10px 24px -6px rgba(6, 78, 59, 0.16);
+
+    --ws-accent: #047857;
+    --ws-accent-hover: #065f46;
+    --ws-active-bg: rgba(4, 120, 87, 0.10);
+    --ws-active-border: #059669;
+    --ws-active-text: #065f46;
+    --ws-cta-bg: #047857;
+    --ws-cta-hover: #065f46;
+    --ws-cta-text: #ffffff;
+    --ws-map-untracked: #d5e2de;
+  }
+
+  html.dark[data-design-theme="quant-terminal"] {
+    --ws-canvas-bg: #060a0c;
+    --ws-canvas-pattern:
+      linear-gradient(to right, rgba(52, 211, 153, 0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(52, 211, 153, 0.055) 1px, transparent 1px);
+    --ws-canvas-size: 24px 24px;
+
+    --ws-panel-bg: #0c1317;
+    --ws-sidebar-bg: #090f12;
+    --ws-header-bg: #090f12;
+    --ws-subpanel-bg: #111b20;
+    --ws-inset-bg: #091014;
+    --ws-footnote-bg: #080e11;
+    --ws-popover-bg: #10191e;
+    --ws-modal-bg: #0c1317;
+    --ws-input-bg: #080e11;
+    --ws-option-bg: #0c1317;
+
+    --ws-border: #1d2f36;
+    --ws-border-strong: #2d4c56;
+    --ws-divider: #152329;
+    --ws-shadow: none;
+    --ws-shadow-popover: 0 14px 32px -6px rgba(0, 0, 0, 0.78);
+
+    --ws-accent: #34d399;
+    --ws-accent-hover: #6ee7b7;
+    --ws-active-bg: rgba(52, 211, 153, 0.13);
+    --ws-active-border: #10b981;
+    --ws-active-text: #6ee7b7;
+    --ws-cta-bg: #10b981;
+    --ws-cta-hover: #34d399;
+    --ws-cta-text: #04100d;
+    --ws-map-untracked: #132127;
+  }
+
+  /* ==========================================================================
+     5. THEME: NORDIC PAPER (Warm Tactile Stone · Soft Shadows · Terracotta)
+     ========================================================================== */
+  html[data-design-theme="nordic-studio"] {
+    --ws-radius: 16px;
+    --ws-radius-sm: 10px;
+    --ws-blur: 0px;
+    --ws-blur-header: 0px;
+    --ws-blur-popover: 0px;
+    --ws-specular: transparent;
+
+    --ws-text: #1c1917;
+    --ws-text-2: #44403c;
+    --ws-text-muted: #686058;
+
+    --ws-canvas-bg: #efeae2;
+    --ws-canvas-pattern: none;
+    --ws-canvas-size: auto;
+
+    --ws-panel-bg: #fcfaf6;
+    --ws-sidebar-bg: #f6f2eb;
+    --ws-header-bg: #faf7f2;
+    --ws-subpanel-bg: #f3eee5;
+    --ws-inset-bg: #f5f0e8;
+    --ws-footnote-bg: #f4efe7;
+    --ws-popover-bg: #fcfaf6;
+    --ws-modal-bg: #fcfaf6;
+    --ws-input-bg: #ffffff;
+    --ws-option-bg: #fcfaf6;
+
+    --ws-border: #e2dad0;
+    --ws-border-strong: #c9bca9;
+    --ws-divider: #ebe4da;
+    --ws-shadow: 0 8px 24px -10px rgba(68, 48, 28, 0.12), 0 1px 2px rgba(68, 48, 28, 0.05);
+    --ws-shadow-popover: 0 18px 40px -10px rgba(68, 48, 28, 0.18);
+
+    --ws-accent: #b45309;
+    --ws-accent-hover: #92400e;
+    --ws-active-bg: rgba(180, 83, 9, 0.11);
+    --ws-active-border: rgba(180, 83, 9, 0.34);
+    --ws-active-text: #92400e;
+    --ws-cta-bg: #b45309;
+    --ws-cta-hover: #92400e;
+    --ws-cta-text: #ffffff;
+    --ws-map-untracked: #dfd8cc;
+  }
+
+  html.dark[data-design-theme="nordic-studio"] {
+    --ws-text: #f5f1eb;
+    --ws-text-2: #d6cec4;
+    --ws-text-muted: #a39a8e;
+
+    --ws-canvas-bg: #151311;
+    --ws-canvas-pattern: none;
+
+    --ws-panel-bg: #1f1c19;
+    --ws-sidebar-bg: #1a1715;
+    --ws-header-bg: #1a1715;
+    --ws-subpanel-bg: #26221e;
+    --ws-inset-bg: #191614;
+    --ws-footnote-bg: #191614;
+    --ws-popover-bg: #25211d;
+    --ws-modal-bg: #1f1c19;
+    --ws-input-bg: #171412;
+    --ws-option-bg: #1f1c19;
+
+    --ws-border: #332d27;
+    --ws-border-strong: #4d4339;
+    --ws-divider: #2a2520;
+    --ws-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
+    --ws-shadow-popover: 0 20px 44px -10px rgba(0, 0, 0, 0.75);
+
+    --ws-accent: #f59e0b;
+    --ws-accent-hover: #fbbf24;
+    --ws-active-bg: rgba(245, 158, 11, 0.14);
+    --ws-active-border: rgba(245, 158, 11, 0.38);
+    --ws-active-text: #fcd34d;
+    --ws-cta-bg: #d97706;
+    --ws-cta-hover: #f59e0b;
+    --ws-cta-text: #120c04;
+    --ws-map-untracked: #29241f;
+  }
+
+  /* ==========================================================================
+     6. GLOBAL ELEMENT BASE RULES
+     ========================================================================== */
   html {
     font-family: var(--font-body);
+    color-scheme: light;
+    background-color: var(--ws-canvas-bg);
+    color: var(--ws-text);
+    transition: background-color 220ms ease, color 220ms ease;
+  }
+
+  html.dark {
     color-scheme: dark;
-    background-color: #090e17;
-    color: #f1f5f9;
+  }
+
+  body {
+    background-color: var(--ws-canvas-bg);
+    color: var(--ws-text);
+    min-height: 100vh;
   }
 
   h1, h2, h3, h4, .font-display {
@@ -27,33 +420,192 @@
   .font-mono {
     font-family: var(--font-mono);
   }
+
+  select option,
+  select optgroup {
+    background-color: var(--ws-option-bg);
+    color: var(--ws-text);
+  }
 }
 
-/* Custom sleek dark scrollbars */
+/* ==========================================================================
+   7. THEME-AWARE SURFACE & UTILITY CLASSES
+   ========================================================================== */
+.ws-canvas-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--ws-canvas-bg);
+  background-image: var(--ws-canvas-pattern);
+  background-size: var(--ws-canvas-size);
+  transition: background-color 240ms ease;
+}
+
+.ws-panel {
+  background: var(--ws-panel-bg);
+  backdrop-filter: blur(var(--ws-blur)) saturate(168%);
+  -webkit-backdrop-filter: blur(var(--ws-blur)) saturate(168%);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius);
+  box-shadow: inset 0 1px 0 0 var(--ws-specular), var(--ws-shadow);
+}
+
+.ws-sidebar {
+  background: var(--ws-sidebar-bg);
+  backdrop-filter: blur(var(--ws-blur-header)) saturate(175%);
+  -webkit-backdrop-filter: blur(var(--ws-blur-header)) saturate(175%);
+  border-right: 1px solid var(--ws-border);
+}
+
+.ws-header {
+  background: var(--ws-header-bg);
+  backdrop-filter: blur(var(--ws-blur-header)) saturate(175%);
+  -webkit-backdrop-filter: blur(var(--ws-blur-header)) saturate(175%);
+  border-bottom: 1px solid var(--ws-border);
+}
+
+.ws-subpanel {
+  background: var(--ws-subpanel-bg);
+}
+
+.ws-inset {
+  background: var(--ws-inset-bg);
+  border: 1px solid var(--ws-divider);
+  border-radius: var(--ws-radius-sm);
+}
+
+.ws-footnote {
+  background: var(--ws-footnote-bg);
+  border-top: 1px solid var(--ws-divider);
+}
+
+.ws-input {
+  background: var(--ws-input-bg);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius-sm);
+  color: var(--ws-text);
+}
+
+.ws-input:hover {
+  border-color: var(--ws-border-strong);
+}
+
+.ws-popover {
+  background: var(--ws-popover-bg);
+  backdrop-filter: blur(var(--ws-blur-popover)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--ws-blur-popover)) saturate(180%);
+  border: 1px solid var(--ws-border-strong);
+  border-radius: var(--ws-radius);
+  box-shadow: inset 0 1px 0 0 var(--ws-specular), var(--ws-shadow-popover);
+}
+
+.ws-modal {
+  background: var(--ws-modal-bg);
+  backdrop-filter: blur(var(--ws-blur-popover)) saturate(185%);
+  -webkit-backdrop-filter: blur(var(--ws-blur-popover)) saturate(185%);
+  border: 1px solid var(--ws-border-strong);
+  border-radius: var(--ws-radius);
+  box-shadow: inset 0 1px 0 0 var(--ws-specular), var(--ws-shadow-popover);
+}
+
+.ws-nav-active {
+  background: var(--ws-active-bg);
+  border: 1px solid var(--ws-active-border);
+  color: var(--ws-active-text);
+  border-radius: var(--ws-radius-sm);
+}
+
+.ws-btn-primary {
+  background-color: var(--ws-cta-bg);
+  color: var(--ws-cta-text);
+  border-radius: var(--ws-radius-sm);
+}
+
+.ws-btn-primary:hover {
+  background-color: var(--ws-cta-hover);
+}
+
+.ws-btn-subtle {
+  background: var(--ws-subtle-btn-bg);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius-sm);
+  color: var(--ws-text-2);
+}
+
+.ws-btn-subtle:hover {
+  background: var(--ws-subtle-btn-hover);
+  color: var(--ws-text);
+  border-color: var(--ws-border-strong);
+}
+
+.ws-radius {
+  border-radius: var(--ws-radius);
+}
+
+.ws-radius-sm {
+  border-radius: var(--ws-radius-sm);
+}
+
+/* Text & Semantic Signals */
+.ws-text { color: var(--ws-text); }
+.ws-text-2 { color: var(--ws-text-2); }
+.ws-text-muted { color: var(--ws-text-muted); }
+.ws-accent { color: var(--ws-accent); }
+.ws-accent-link { color: var(--ws-accent); }
+.ws-accent-link:hover { color: var(--ws-accent-hover); }
+.ws-positive { color: var(--ws-positive); }
+.ws-negative { color: var(--ws-negative); }
+.ws-warm { color: var(--ws-warm); }
+.ws-violet { color: var(--ws-violet); }
+
+/* Borders, Dividers & Interactive Rows */
+.ws-border { border-color: var(--ws-border); }
+.ws-border-strong { border-color: var(--ws-border-strong); }
+.ws-divider-border { border-color: var(--ws-divider); }
+.ws-divide > :not([hidden]) ~ :not([hidden]) {
+  border-top-width: 1px;
+  border-color: var(--ws-divider);
+}
+.ws-row-hover:hover {
+  background-color: var(--ws-hover);
+}
+.ws-row-selected {
+  background-color: var(--ws-selected);
+}
+
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b111d;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #233046;
-  border-radius: 3px;
+  background: var(--ws-scroll-thumb);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334666;
+  background: var(--ws-scroll-thumb-hover);
 }
 
-/* Recharts tooltip & axis dark optical compensation */
+/* Recharts Theme Alignment */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: #1e293b;
+  stroke: var(--ws-grid-stroke);
 }
 
 .recharts-tooltip-wrapper {
   outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  .ws-canvas-bg {
+    transition: none;
+  }
 }

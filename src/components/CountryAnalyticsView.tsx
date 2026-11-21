@@ -15,7 +15,14 @@ import {
   YAxis,
 } from 'recharts';
 import { ArrowRightLeft, Building2, Download, ExternalLink, ShieldCheck } from 'lucide-react';
-import type { CityRecord, CountryRecord, ProjectionScenario } from '../types/worldStats';
+import {
+  AVAILABLE_DATA_YEARS,
+  DEFAULT_DATA_YEAR,
+  type CityRecord,
+  type CountryRecord,
+  type DataYear,
+  type ProjectionScenario,
+} from '../types/worldStats';
 import {
   computeDependencyRatio,
   computeProjectedChange2050Pct,
@@ -37,6 +44,8 @@ interface CountryAnalyticsViewProps {
   countries: CountryRecord[];
   selectedCountry: CountryRecord;
   countryCities: CityRecord[];
+  dataYear: DataYear;
+  onChangeYear: (year: DataYear) => void;
   onSelectCountry: (countryCode: string) => void;
   onCompareCities: (cityIds: string[]) => void;
   onExportCsv: () => void;
@@ -44,10 +53,21 @@ interface CountryAnalyticsViewProps {
   onOpenSources: () => void;
 }
 
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: 'var(--ws-popover-bg)',
+  borderColor: 'var(--ws-border-strong)',
+  color: 'var(--ws-text)',
+  borderRadius: 'var(--ws-radius-sm)',
+  fontSize: '12px',
+  boxShadow: 'var(--ws-shadow-popover)',
+};
+
 export function CountryAnalyticsView({
   countries,
   selectedCountry,
   countryCities,
+  dataYear,
+  onChangeYear,
   onSelectCountry,
   onCompareCities,
   onExportCsv,
@@ -59,29 +79,29 @@ export function CountryAnalyticsView({
   const workingAgeShare = computeWorkingAgeShare(selectedCountry.ageBrackets);
   const dependencyRatio = computeDependencyRatio(selectedCountry.ageBrackets);
   const proj2050Delta = computeProjectedChange2050Pct(selectedCountry);
-  const gdp10YrGrowthPct = computeProjectedGdpGrowth10YrPct(selectedCountry);
+  const gdp10YrGrowthPct = computeProjectedGdpGrowth10YrPct(selectedCountry, dataYear);
 
   const gdpTrajectory10Yr = useMemo(
-    () => computeProjectedGdpTrajectory10Yr(selectedCountry),
-    [selectedCountry]
+    () => computeProjectedGdpTrajectory10Yr(selectedCountry, dataYear),
+    [selectedCountry, dataYear]
   );
 
-  const gdp2035Target =
+  const trajectoryEndYear = dataYear + 10;
+  const gdpTargetEndYear =
     gdpTrajectory10Yr[gdpTrajectory10Yr.length - 1]?.gdpTrillions ??
     selectedCountry.gdpTrillions;
   const impliedCagr10Yr = useMemo(() => {
     const start = gdpTrajectory10Yr[0]?.gdpTrillions ?? selectedCountry.gdpTrillions;
     if (start <= 0) return 0;
-    return Number(((Math.pow(gdp2035Target / start, 1 / 10) - 1) * 100).toFixed(2));
-  }, [gdpTrajectory10Yr, gdp2035Target, selectedCountry.gdpTrillions]);
+    return Number(((Math.pow(gdpTargetEndYear / start, 1 / 10) - 1) * 100).toFixed(2));
+  }, [gdpTrajectory10Yr, gdpTargetEndYear, selectedCountry.gdpTrillions]);
 
   const multiSourceComparison = useMemo(
-    () => buildCountryMultiSourceComparison(selectedCountry),
-    [selectedCountry]
+    () => buildCountryMultiSourceComparison(selectedCountry, dataYear),
+    [selectedCountry, dataYear]
   );
 
   const pyramidData = useMemo(() => {
-    // Reverse so 65+ is at top, 0-14 at bottom like a true population pyramid
     return [...selectedCountry.ageBrackets].reverse().map((b) => ({
       group: b.group,
       male: -b.malePct,
@@ -109,29 +129,31 @@ export function CountryAnalyticsView({
   return (
     <div className="space-y-6">
       {/* Country Selector & Overview Header */}
-      <section className="bg-[#111827] border border-slate-800/90 rounded-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-5 py-4 border-b border-slate-800/80">
+      <section className="ws-panel overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-5 py-4 border-b ws-border">
           <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 text-xs ws-text-muted">
               <span>{selectedCountry.region}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono">{selectedCountry.code}</span>
               <span aria-hidden="true">·</span>
               <span>{countryCities.length} Tracked Cities</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono ws-accent">{dataYear} Series</span>
             </div>
-            <h1 className="text-xl font-semibold text-slate-50 mt-1">
+            <h1 className="text-xl font-semibold ws-text mt-1">
               {selectedCountry.name} Demographic &amp; Economic Profile
             </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <label className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="whitespace-nowrap">Select Country</span>
+            <label className="flex items-center gap-2 text-xs ws-text-muted">
+              <span className="whitespace-nowrap">Country</span>
               <select
                 aria-label="Select country to inspect"
                 value={selectedCountry.code}
                 onChange={(e) => onSelectCountry(e.target.value)}
-                className="bg-[#0B111D] border border-slate-700 rounded-md px-3 py-2 text-xs font-medium text-slate-100 focus:outline-none focus:border-sky-500 min-w-[180px]"
+                className="ws-input px-3 py-2 text-xs font-medium focus:outline-none min-w-[170px]"
               >
                 {countries.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -141,10 +163,26 @@ export function CountryAnalyticsView({
               </select>
             </label>
 
+            <label className="flex items-center gap-1.5 text-xs ws-text-muted">
+              <span className="whitespace-nowrap">Year</span>
+              <select
+                aria-label="Select country analytics data year"
+                value={dataYear}
+                onChange={(e) => onChangeYear(Number(e.target.value) as DataYear)}
+                className="ws-input px-2.5 py-2 text-xs font-mono tabular-nums font-medium focus:outline-none"
+              >
+                {AVAILABLE_DATA_YEARS.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr === DEFAULT_DATA_YEAR ? `${yr} (Latest)` : String(yr)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <button
               type="button"
               onClick={onExportCsv}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium ws-btn-subtle transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>CSV</span>
@@ -152,7 +190,7 @@ export function CountryAnalyticsView({
             <button
               type="button"
               onClick={onExportPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium ws-btn-subtle transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>PDF</span>
@@ -161,15 +199,15 @@ export function CountryAnalyticsView({
         </div>
 
         {/* Country Key Indicators Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x divide-slate-800/80">
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">Population</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-slate-50">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x ws-divider-border">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">Population ({dataYear})</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-text">
               {selectedCountry.populationMillions.toFixed(1)}M
             </p>
             <p
               className={`text-[11px] font-mono tabular-nums mt-0.5 ${
-                selectedCountry.annualPopGrowthPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                selectedCountry.annualPopGrowthPct >= 0 ? 'ws-positive' : 'ws-negative'
               }`}
             >
               {selectedCountry.annualPopGrowthPct >= 0 ? '+' : ''}
@@ -177,68 +215,68 @@ export function CountryAnalyticsView({
             </p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">Nominal GDP</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-slate-50">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">Nominal GDP</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-text">
               ${selectedCountry.gdpTrillions.toFixed(2)}T
             </p>
-            <p className="text-[11px] font-mono tabular-nums text-emerald-400 mt-0.5">
+            <p className="text-[11px] font-mono tabular-nums ws-positive mt-0.5">
               +{selectedCountry.gdpGrowthPct}% real
             </p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">GDP / Capita</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-sky-300">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">GDP / Capita</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-accent">
               {formatCurrency(selectedCountry.gdpPerCapita)}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">USD nominal</p>
+            <p className="text-[11px] ws-text-muted mt-0.5">USD nominal</p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">Median Age</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-amber-300">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">Median Age</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-warm">
               {selectedCountry.medianAge.toFixed(1)} yrs
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] ws-text-muted mt-0.5">
               Life exp. {selectedCountry.lifeExpectancy}y
             </p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">Working Age</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-slate-50">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">Working Age</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-text">
               {workingAgeShare.toFixed(1)}%
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Ages 15–64</p>
+            <p className="text-[11px] ws-text-muted mt-0.5">Ages 15–64</p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">Dependency Ratio</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-slate-50">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">Dependency Ratio</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-text">
               {dependencyRatio.toFixed(1)}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">per 100 workers</p>
+            <p className="text-[11px] ws-text-muted mt-0.5">per 100 workers</p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">Fertility Rate</p>
-            <p className="mt-1 text-base font-semibold font-mono tabular-nums text-slate-50">
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">Fertility Rate</p>
+            <p className="mt-1 text-base font-semibold font-mono tabular-nums ws-text">
               {selectedCountry.fertilityRate.toFixed(2)}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">births / woman</p>
+            <p className="text-[11px] ws-text-muted mt-0.5">births / woman</p>
           </div>
 
-          <div className="px-4 py-3.5">
-            <p className="text-[11px] text-slate-400">2050 Outlook</p>
+          <div className="px-4 py-3.5 ws-divider-border">
+            <p className="text-[11px] ws-text-muted">2050 Outlook</p>
             <p
               className={`mt-1 text-base font-semibold font-mono tabular-nums ${
-                proj2050Delta >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                proj2050Delta >= 0 ? 'ws-positive' : 'ws-negative'
               }`}
             >
               {formatSignedPct(proj2050Delta)}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] ws-text-muted mt-0.5">
               Urban {selectedCountry.urbanizationPct}%
             </p>
           </div>
@@ -250,16 +288,16 @@ export function CountryAnalyticsView({
         {/* Population Age Pyramid */}
         <section
           aria-label="Country age demographics pyramid"
-          className="bg-[#111827] border border-slate-800/90 rounded-lg"
+          className="ws-panel overflow-hidden"
         >
-          <div className="px-5 py-4 border-b border-slate-800/80">
-            <h2 className="text-base font-semibold text-slate-100">
-              Age Structure Pyramid ({selectedCountry.name})
+          <div className="px-5 py-4 border-b ws-border">
+            <h2 className="text-base font-semibold ws-text">
+              Age Structure Pyramid ({selectedCountry.name} · {dataYear})
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs ws-text-muted mt-0.5">
               Share of total population by age bracket and sex · Youth (0–14):{' '}
-              <span className="font-mono tabular-nums text-slate-200">{youthShare.toFixed(1)}%</span> · Seniors (65+):{' '}
-              <span className="font-mono tabular-nums text-slate-200">{seniorShare.toFixed(1)}%</span>
+              <span className="font-mono tabular-nums ws-text-2">{youthShare.toFixed(1)}%</span> · Seniors (65+):{' '}
+              <span className="font-mono tabular-nums ws-text-2">{seniorShare.toFixed(1)}%</span>
             </p>
           </div>
 
@@ -271,34 +309,34 @@ export function CountryAnalyticsView({
                 stackOffset="sign"
                 margin={{ top: 8, right: 20, left: 8, bottom: 8 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" horizontal={false} />
                 <XAxis
                   type="number"
                   domain={[-maxBracketVal, maxBracketVal]}
                   tickFormatter={(v) => `${Math.abs(v)}%`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                 />
                 <YAxis
                   type="category"
                   dataKey="group"
-                  tick={{ fill: '#CBD5E1', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={48}
                 />
-                <ReferenceLine x={0} stroke="#475569" />
+                <ReferenceLine x={0} stroke="var(--ws-chart-axis)" />
                 <Tooltip
-                  cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                  cursor={{ fill: 'var(--ws-hover)' }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const row = payload[0].payload;
                     return (
-                      <div className="bg-[#0B111D] border border-slate-700 rounded-md px-3 py-2 text-xs shadow-xl">
-                        <p className="font-semibold text-slate-100">Age Cohort {row.group}</p>
+                      <div className="ws-popover px-3 py-2 text-xs">
+                        <p className="font-semibold ws-text">Age Cohort {row.group}</p>
                         <div className="mt-1 space-y-0.5 font-mono tabular-nums">
-                          <p className="text-sky-300">Male: {row.maleAbs.toFixed(2)}%</p>
-                          <p className="text-amber-300">Female: {row.femaleAbs.toFixed(2)}%</p>
-                          <p className="text-slate-200 border-t border-slate-800 pt-1 mt-1">
+                          <p className="ws-accent">Male: {row.maleAbs.toFixed(2)}%</p>
+                          <p className="ws-warm">Female: {row.femaleAbs.toFixed(2)}%</p>
+                          <p className="ws-text border-t ws-border pt-1 mt-1">
                             Combined: {row.total.toFixed(2)}%
                           </p>
                         </div>
@@ -308,9 +346,9 @@ export function CountryAnalyticsView({
                 />
                 <Legend
                   content={() => (
-                    <div className="flex items-center justify-center gap-5 pt-2 text-xs text-slate-300">
+                    <div className="flex items-center justify-center gap-5 pt-2 text-xs ws-text-2">
                       <span className="inline-flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-xs bg-[#38BDF8]" />
+                        <span className="w-2.5 h-2.5 rounded-xs bg-[#0EA5E9]" />
                         <span>Male % (Left)</span>
                       </span>
                       <span className="inline-flex items-center gap-1.5">
@@ -320,7 +358,7 @@ export function CountryAnalyticsView({
                     </div>
                   )}
                 />
-                <Bar dataKey="male" name="Male %" fill="#38BDF8" stackId="stack" radius={[3, 0, 0, 3]} />
+                <Bar dataKey="male" name="Male %" fill="#0EA5E9" stackId="stack" radius={[3, 0, 0, 3]} />
                 <Bar dataKey="female" name="Female %" fill="#F59E0B" stackId="stack" radius={[0, 3, 3, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -330,31 +368,31 @@ export function CountryAnalyticsView({
         {/* Population Projections 2020-2100 */}
         <section
           aria-label="Population projections 2020 to 2100"
-          className="bg-[#111827] border border-slate-800/90 rounded-lg"
+          className="ws-panel overflow-hidden"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-slate-800/80">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b ws-border">
             <div>
-              <h2 className="text-base font-semibold text-slate-100">
+              <h2 className="text-base font-semibold ws-text">
                 Population Projections (2020–2100)
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs ws-text-muted mt-0.5">
                 UN demographic fertility variants in millions
               </p>
             </div>
             <div
               role="group"
               aria-label="Projection scenario selector"
-              className="inline-flex items-center p-0.5 bg-[#0B111D] border border-slate-800 rounded-md"
+              className="inline-flex items-center p-0.5 ws-inset"
             >
               {(['all', 'low', 'medium', 'high'] as const).map((sc) => (
                 <button
                   key={sc}
                   type="button"
                   onClick={() => setScenarioView(sc)}
-                  className={`px-2 py-1 text-[11px] font-medium rounded transition-colors capitalize whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`px-2 py-1 text-[11px] font-medium transition-colors capitalize whitespace-nowrap shrink-0 cursor-pointer ${
                     scenarioView === sc
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      ? 'ws-nav-active'
+                      : 'ws-text-muted hover:ws-text border border-transparent ws-radius-sm'
                   }`}
                 >
                   {sc}
@@ -371,43 +409,38 @@ export function CountryAnalyticsView({
               >
                 <defs>
                   <linearGradient id="projMedFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#38BDF8" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="#38BDF8" stopOpacity={0.02} />
+                    <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" />
                 <XAxis
                   dataKey="year"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                 />
                 <YAxis
                   tickFormatter={(v) => `${v}M`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={58}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0B111D',
-                    borderColor: '#334155',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                   formatter={(value, name) => [`${value ?? ''}M`, String(name ?? '')]}
                 />
                 <Legend
-                  formatter={(value) => <span className="text-xs text-slate-300">{value}</span>}
+                  formatter={(value) => <span className="text-xs ws-text-2">{value}</span>}
                 />
                 {(scenarioView === 'all' || scenarioView === 'high') && (
                   <Line
                     type="monotone"
                     dataKey="high"
                     name="High Variant"
-                    stroke="#34D399"
+                    stroke="#10B981"
                     strokeWidth={2}
                     strokeDasharray="4 4"
-                    dot={{ r: 3, fill: '#34D399' }}
+                    dot={{ r: 3, fill: '#10B981' }}
                   />
                 )}
                 {(scenarioView === 'all' || scenarioView === 'medium') && (
@@ -415,10 +448,10 @@ export function CountryAnalyticsView({
                     type="monotone"
                     dataKey="medium"
                     name="Medium Variant"
-                    stroke="#38BDF8"
+                    stroke="#0EA5E9"
                     strokeWidth={2.5}
                     fill="url(#projMedFill)"
-                    dot={{ r: 3.5, fill: '#38BDF8' }}
+                    dot={{ r: 3.5, fill: '#0EA5E9' }}
                   />
                 )}
                 {(scenarioView === 'all' || scenarioView === 'low') && (
@@ -426,10 +459,10 @@ export function CountryAnalyticsView({
                     type="monotone"
                     dataKey="low"
                     name="Low Variant"
-                    stroke="#FB7185"
+                    stroke="#E11D48"
                     strokeWidth={2}
                     strokeDasharray="4 4"
-                    dot={{ r: 3, fill: '#FB7185' }}
+                    dot={{ r: 3, fill: '#E11D48' }}
                   />
                 )}
               </ComposedChart>
@@ -443,26 +476,26 @@ export function CountryAnalyticsView({
         {/* 10-Year Projected GDP Growth Trajectory Line Chart */}
         <section
           aria-label="10-year projected GDP growth trajectory"
-          className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden flex flex-col justify-between"
+          className="ws-panel overflow-hidden flex flex-col justify-between"
         >
-          <div className="px-5 py-4 border-b border-slate-800/80 space-y-1.5">
+          <div className="px-5 py-4 border-b ws-border space-y-1.5">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="text-base font-semibold text-slate-100">
-                10-Year Projected GDP Growth Trajectory (2025–2035)
+              <h2 className="text-base font-semibold ws-text">
+                10-Year Projected GDP Growth Trajectory ({dataYear}–{trajectoryEndYear})
               </h2>
-              <span className="font-mono tabular-nums text-xs font-semibold text-emerald-400">
+              <span className="font-mono tabular-nums text-xs font-semibold ws-positive">
                 {formatSignedPct(gdp10YrGrowthPct)} (10-Yr)
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs ws-text-muted">
               Annual cumulative GDP expansion (%) and nominal output ($T) · Est. CAGR{' '}
-              <span className="font-mono tabular-nums text-slate-200">
+              <span className="font-mono tabular-nums ws-text-2">
                 {impliedCagr10Yr >= 0 ? '+' : ''}
                 {impliedCagr10Yr}%/yr
               </span>{' '}
-              · 2035 Target{' '}
-              <span className="font-mono tabular-nums text-sky-300">
-                ${gdp2035Target.toFixed(2)}T
+              · {trajectoryEndYear} Target{' '}
+              <span className="font-mono tabular-nums ws-accent">
+                ${gdpTargetEndYear.toFixed(2)}T
               </span>
             </p>
           </div>
@@ -473,25 +506,25 @@ export function CountryAnalyticsView({
                 data={gdpTrajectory10Yr}
                 margin={{ top: 10, right: 16, left: 4, bottom: 8 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" />
                 <XAxis
                   dataKey="year"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                 />
                 <YAxis
                   yAxisId="pct"
                   tickFormatter={(v) => `${v >= 0 ? '+' : ''}${v}%`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={52}
                 />
                 <YAxis
                   yAxisId="usd"
                   orientation="right"
                   tickFormatter={(v) => `$${v}T`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={56}
                 />
                 <Tooltip
@@ -504,18 +537,18 @@ export function CountryAnalyticsView({
                       annualGrowthPct: number;
                     };
                     return (
-                      <div className="bg-[#0B111D] border border-slate-700 rounded-md px-3 py-2 text-xs shadow-xl">
-                        <p className="font-semibold text-slate-100">
+                      <div className="ws-popover px-3 py-2 text-xs">
+                        <p className="font-semibold ws-text">
                           {selectedCountry.name} · {pt.year}
                         </p>
                         <div className="mt-1 space-y-0.5 font-mono tabular-nums">
-                          <p className="text-emerald-400">
+                          <p className="ws-positive">
                             Cumulative Growth: {formatSignedPct(pt.cumulativeGrowthPct)}
                           </p>
-                          <p className="text-sky-300">
+                          <p className="ws-accent">
                             Projected GDP: ${pt.gdpTrillions.toFixed(2)}T
                           </p>
-                          <p className="text-slate-400">
+                          <p className="ws-text-muted">
                             Annual Pace: {pt.annualGrowthPct >= 0 ? '+' : ''}
                             {pt.annualGrowthPct.toFixed(2)}% / yr
                           </p>
@@ -525,16 +558,16 @@ export function CountryAnalyticsView({
                   }}
                 />
                 <Legend
-                  formatter={(value) => <span className="text-xs text-slate-300">{value}</span>}
+                  formatter={(value) => <span className="text-xs ws-text-2">{value}</span>}
                 />
                 <Line
                   yAxisId="pct"
                   type="monotone"
                   dataKey="cumulativeGrowthPct"
                   name="Cumulative Growth (%)"
-                  stroke="#34D399"
+                  stroke="#10B981"
                   strokeWidth={2.5}
-                  dot={{ r: 3.5, fill: '#34D399' }}
+                  dot={{ r: 3.5, fill: '#10B981' }}
                   activeDot={{ r: 5 }}
                 />
                 <Line
@@ -542,17 +575,17 @@ export function CountryAnalyticsView({
                   type="monotone"
                   dataKey="gdpTrillions"
                   name="Nominal GDP ($T)"
-                  stroke="#38BDF8"
+                  stroke="#0EA5E9"
                   strokeWidth={2}
                   strokeDasharray="4 4"
-                  dot={{ r: 2.5, fill: '#38BDF8' }}
+                  dot={{ r: 2.5, fill: '#0EA5E9' }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
           <SourceFootnote
-            sourceText={getCountrySourceCitation(selectedCountry.code)}
-            vintage="2025–2035 Modeled Compound Trajectory"
+            sourceText={getCountrySourceCitation(selectedCountry.code, dataYear)}
+            vintage={`${dataYear}–${trajectoryEndYear} Modeled Compound Trajectory`}
             onOpenSources={onOpenSources}
           />
         </section>
@@ -560,13 +593,13 @@ export function CountryAnalyticsView({
         {/* GDP Relationship vs Working Age & Aging */}
         <section
           aria-label="GDP relationship with country demographics"
-          className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden flex flex-col justify-between"
+          className="ws-panel overflow-hidden flex flex-col justify-between"
         >
-          <div className="px-5 py-4 border-b border-slate-800/80">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="px-5 py-4 border-b ws-border">
+            <h2 className="text-base font-semibold ws-text">
               GDP Trajectory vs. Workforce Demographics (2005–2040)
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs ws-text-muted mt-0.5">
               Nominal GDP ($ Trillions, bars) plotted against Working-Age Share (15–64%) and Median Age shift
             </p>
           </div>
@@ -577,17 +610,17 @@ export function CountryAnalyticsView({
                 data={selectedCountry.gdpHistory}
                 margin={{ top: 10, right: 20, left: 6, bottom: 8 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--ws-grid-stroke)" />
                 <XAxis
                   dataKey="year"
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                 />
                 <YAxis
                   yAxisId="gdp"
                   tickFormatter={(v) => `$${v}T`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={58}
                 />
                 <YAxis
@@ -595,17 +628,12 @@ export function CountryAnalyticsView({
                   orientation="right"
                   domain={[15, 78]}
                   tickFormatter={(v) => `${v}`}
-                  tick={{ fill: '#94A3B8', fontSize: 11 }}
-                  stroke="#334155"
+                  tick={{ fill: 'var(--ws-chart-tick)', fontSize: 11 }}
+                  stroke="var(--ws-chart-axis)"
                   width={42}
                 />
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0B111D',
-                    borderColor: '#334155',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                  }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                   formatter={(value, name) => {
                     const label = String(name ?? '');
                     if (label === 'Nominal GDP ($T)') return [`$${value ?? ''}T`, label];
@@ -614,14 +642,14 @@ export function CountryAnalyticsView({
                   }}
                 />
                 <Legend
-                  formatter={(value) => <span className="text-xs text-slate-300">{value}</span>}
+                  formatter={(value) => <span className="text-xs ws-text-2">{value}</span>}
                 />
                 <Bar
                   yAxisId="gdp"
                   dataKey="gdpTrillions"
                   name="Nominal GDP ($T)"
-                  fill="#1D4ED8"
-                  fillOpacity={0.75}
+                  fill="#2563EB"
+                  fillOpacity={0.78}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={42}
                 />
@@ -630,9 +658,9 @@ export function CountryAnalyticsView({
                   type="monotone"
                   dataKey="workingAgePct"
                   name="Working Age (%)"
-                  stroke="#34D399"
+                  stroke="#10B981"
                   strokeWidth={2.2}
-                  dot={{ r: 3, fill: '#34D399' }}
+                  dot={{ r: 3, fill: '#10B981' }}
                 />
                 <Line
                   yAxisId="demo"
@@ -647,7 +675,7 @@ export function CountryAnalyticsView({
             </ResponsiveContainer>
           </div>
           <SourceFootnote
-            sourceText={getCountrySourceCitation(selectedCountry.code)}
+            sourceText={getCountrySourceCitation(selectedCountry.code, dataYear)}
             vintage="2005–2040 Historical & IMF/UN Trajectory"
             onOpenSources={onOpenSources}
           />
@@ -657,28 +685,28 @@ export function CountryAnalyticsView({
       {/* Multi-Source Data Comparison: Official National Office vs International Agencies */}
       <section
         aria-label="Multi-source statistical comparison"
-        className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden"
+        className="ws-panel overflow-hidden"
       >
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-5 py-4 border-b border-slate-800/80">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-5 py-4 border-b ws-border">
           <div>
-            <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Multi-Source Data Comparison &amp; Official National Benchmark ({selectedCountry.name})</span>
+            <h2 className="text-base font-semibold ws-text flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 ws-positive" />
+              <span>Multi-Source Data Comparison &amp; Official National Benchmark ({selectedCountry.name} · {dataYear})</span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs ws-text-muted mt-0.5">
               Cross-checking official national statistical office releases ({multiSourceComparison.officialAgencyName}, {multiSourceComparison.officialDataYear}) against UN DESA, IMF WEO, and World Bank WDI
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono tabular-nums text-slate-300 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono tabular-nums ws-text-2 shrink-0">
             <span>
               Pop Variance:{' '}
-              <strong className="text-sky-300">±{multiSourceComparison.popSpreadPct}%</strong>
+              <strong className="ws-accent">±{multiSourceComparison.popSpreadPct}%</strong>
             </span>
-            <span aria-hidden="true" className="text-slate-600">·</span>
+            <span aria-hidden="true" className="opacity-45">·</span>
             <span>
               GDP Variance:{' '}
-              <strong className="text-emerald-400">±{multiSourceComparison.gdpSpreadPct}%</strong>
+              <strong className="ws-positive">±{multiSourceComparison.gdpSpreadPct}%</strong>
             </span>
           </div>
         </div>
@@ -686,7 +714,7 @@ export function CountryAnalyticsView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-800 bg-[#0D1422] text-slate-400">
+              <tr className="border-b ws-border ws-subpanel ws-text-2">
                 <th className="py-2.5 px-4 font-medium min-w-[240px]">Statistical Source &amp; Series</th>
                 <th className="py-2.5 px-3 font-medium whitespace-nowrap">Data Year</th>
                 <th className="py-2.5 px-3 font-medium text-right whitespace-nowrap">Population</th>
@@ -697,7 +725,7 @@ export function CountryAnalyticsView({
                 <th className="py-2.5 px-4 font-medium text-right whitespace-nowrap">Portal</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70">
+            <tbody className="ws-divide">
               {multiSourceComparison.rows.map((src) => {
                 const isOfficial = src.sourceType === 'official-national';
                 return (
@@ -705,49 +733,49 @@ export function CountryAnalyticsView({
                     key={src.id}
                     className={
                       isOfficial
-                        ? 'bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors'
-                        : 'hover:bg-slate-800/35 transition-colors'
+                        ? 'ws-row-selected transition-colors'
+                        : 'ws-row-hover transition-colors'
                     }
                   >
                     <td className="py-3 px-4 align-top">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-slate-100">{src.sourceName}</span>
+                        <span className="font-semibold ws-text">{src.sourceName}</span>
                         {isOfficial && (
-                          <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                          <span className="text-[10px] font-medium uppercase tracking-wide ws-positive">
                             · Official National
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-300 mt-0.5">{src.datasetTitle}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">{src.methodologyNote}</p>
+                      <p className="text-[11px] ws-text-2 mt-0.5">{src.datasetTitle}</p>
+                      <p className="text-[11px] ws-text-muted mt-0.5">{src.methodologyNote}</p>
                     </td>
-                    <td className="py-3 px-3 align-top font-mono tabular-nums text-sky-300 whitespace-nowrap">
+                    <td className="py-3 px-3 align-top font-mono tabular-nums ws-accent whitespace-nowrap">
                       {src.dataYear}
                     </td>
-                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right text-slate-100 whitespace-nowrap">
+                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right ws-text whitespace-nowrap">
                       {src.populationMillions !== null ? `${src.populationMillions.toFixed(1)}M` : '—'}
                     </td>
-                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right text-emerald-400 whitespace-nowrap">
+                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right ws-positive whitespace-nowrap">
                       {src.gdpTrillions !== null ? `$${src.gdpTrillions.toFixed(2)}T` : '—'}
                     </td>
-                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right text-sky-300 whitespace-nowrap">
+                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right ws-accent whitespace-nowrap">
                       {src.gdpPerCapita !== null ? formatCurrency(src.gdpPerCapita) : '—'}
                     </td>
-                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right text-amber-300 whitespace-nowrap">
+                    <td className="py-3 px-3 align-top font-mono tabular-nums text-right ws-warm whitespace-nowrap">
                       {src.medianAge !== null ? `${src.medianAge.toFixed(1)} yrs` : '—'}
                     </td>
                     <td className="py-3 px-3 align-top font-mono tabular-nums text-right whitespace-nowrap">
                       {isOfficial ? (
-                        <span className="text-emerald-400 font-medium">Reference Baseline</span>
+                        <span className="ws-positive font-medium">Reference Baseline</span>
                       ) : (
                         <div className="space-y-0.5">
                           {src.popDeltaVsOfficialPct !== null && (
-                            <p className="text-[11px] text-slate-300">
+                            <p className="text-[11px] ws-text-2">
                               Pop: {formatSignedPct(src.popDeltaVsOfficialPct)}
                             </p>
                           )}
                           {src.gdpDeltaVsOfficialPct !== null && (
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] ws-text-muted">
                               GDP: {formatSignedPct(src.gdpDeltaVsOfficialPct)}
                             </p>
                           )}
@@ -759,7 +787,7 @@ export function CountryAnalyticsView({
                         href={src.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 hover:underline font-medium"
+                        className="inline-flex items-center gap-1 ws-accent-link hover:underline font-medium"
                       >
                         <span>Verify</span>
                         <ExternalLink className="w-3 h-3" />
@@ -772,8 +800,8 @@ export function CountryAnalyticsView({
           </table>
         </div>
         <SourceFootnote
-          sourceText={`${multiSourceComparison.officialAgencyName} (${multiSourceComparison.officialDataYear}) · UN DESA WPP (2024–2025) · IMF WEO (2024–2025) · World Bank WDI (2023)`}
-          vintage="Cross-Agency Reconciliation Benchmark"
+          sourceText={`${multiSourceComparison.officialAgencyName} (${multiSourceComparison.officialDataYear}) · UN DESA WPP (${dataYear}) · IMF WEO (${dataYear}) · World Bank WDI (${dataYear - 1} Audited)`}
+          vintage={`Cross-Agency Reconciliation (${dataYear})`}
           onOpenSources={onOpenSources}
         />
       </section>
@@ -781,15 +809,15 @@ export function CountryAnalyticsView({
       {/* Country City-Level Breakdown */}
       <section
         aria-label="City level breakdown"
-        className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden"
+        className="ws-panel overflow-hidden"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-slate-800/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b ws-border">
           <div>
-            <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-sky-400" />
-              <span>City-Level Detail Breakdown ({selectedCountry.name})</span>
+            <h2 className="text-base font-semibold ws-text flex items-center gap-2">
+              <Building2 className="w-4 h-4 ws-accent" />
+              <span>City-Level Detail Breakdown ({selectedCountry.name} · {dataYear})</span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs ws-text-muted mt-0.5">
               Compare municipal population, economic share, median age, and 2050 trajectories
             </p>
           </div>
@@ -798,7 +826,7 @@ export function CountryAnalyticsView({
             <button
               type="button"
               onClick={() => onCompareCities(countryCities.slice(0, 4).map((c) => c.id))}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ws-nav-active transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
               <span>Compare All {selectedCountry.name} Cities</span>
@@ -809,7 +837,7 @@ export function CountryAnalyticsView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-800 bg-[#0D1422] text-slate-400">
+              <tr className="border-b ws-border ws-subpanel ws-text-2">
                 <th className="py-2.5 px-4 font-medium">City</th>
                 <th className="py-2.5 px-4 font-medium text-right">Population</th>
                 <th className="py-2.5 px-4 font-medium text-right">Metro Area</th>
@@ -822,39 +850,39 @@ export function CountryAnalyticsView({
                 <th className="py-2.5 px-4 font-medium text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70">
+            <tbody className="ws-divide">
               {countryCities.map((city) => {
                 const natlShare = (
                   (city.gdpBillions / (selectedCountry.gdpTrillions * 1000)) *
                   100
                 ).toFixed(1);
                 return (
-                  <tr key={city.id} className="hover:bg-slate-800/35 transition-colors">
-                    <td className="py-3 px-4 font-medium text-slate-100 whitespace-nowrap">
+                  <tr key={city.id} className="ws-row-hover transition-colors">
+                    <td className="py-3 px-4 font-medium ws-text whitespace-nowrap">
                       {city.name}
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-slate-200">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-text-2">
                       {formatCompactNumber(city.population)}
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-slate-300">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-text-2">
                       {formatCompactNumber(city.metroPopulation)}
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-emerald-400">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-positive">
                       ${city.gdpBillions.toLocaleString('en-US')}B
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-slate-300">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-text-2">
                       {natlShare}%
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-sky-300">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-accent">
                       {formatCurrency(city.gdpPerCapita)}
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-amber-300">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-warm">
                       {city.medianAge.toFixed(1)} yrs
                     </td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-right text-slate-200">
+                    <td className="py-3 px-4 font-mono tabular-nums text-right ws-text-2">
                       {formatCompactNumber(city.projected2050)}
                     </td>
-                    <td className="py-3 px-4 text-slate-400 whitespace-nowrap">
+                    <td className="py-3 px-4 ws-text-muted whitespace-nowrap">
                       {city.primarySector}
                     </td>
                     <td className="py-3 px-4 text-right whitespace-nowrap">
@@ -865,7 +893,7 @@ export function CountryAnalyticsView({
                           onCompareCities(secondCity ? [city.id, secondCity.id] : [city.id, 'usa-nyc']);
                         }}
                         aria-label={`Compare ${city.name}`}
-                        className="text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline cursor-pointer"
+                        className="text-xs font-medium ws-accent-link hover:underline cursor-pointer"
                       >
                         Compare
                       </button>
@@ -877,7 +905,8 @@ export function CountryAnalyticsView({
           </table>
         </div>
         <SourceFootnote
-          sourceText={getCitySourceCitation(selectedCountry.code)}
+          sourceText={getCitySourceCitation(selectedCountry.code, dataYear)}
+          vintage={`${dataYear} Municipal Series`}
           onOpenSources={onOpenSources}
         />
       </section>
