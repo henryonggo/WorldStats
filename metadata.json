@@ -1,0 +1,8 @@
+{
+  "name": "WorldStats",
+  "description": "Interactive global demographic, GDP correlation, and city-level statistical intelligence platform with real-time data visualizations, age projections, side-by-side comparison, and CSV/PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

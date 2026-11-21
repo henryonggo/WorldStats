@@ -1,0 +1,664 @@
+import type {
+  AgeBracket,
+  CityRecord,
+  CountryRecord,
+  LiveWorldCounters,
+  Region,
+  RegressionResult,
+} from '../types/worldStats';
+import {
+  getCitySourceCitation,
+  getCountrySourceCitation,
+  NATIONAL_OFFICE_BY_COUNTRY,
+} from '../data/dataSources';
+
+// Reference epoch: Jan 1, 2026 00:00:00 UTC
+const EPOCH_2026_MS = Date.UTC(2026, 0, 1, 0, 0, 0);
+const BASE_WORLD_POP_2026 = 8_231_613_070;
+// Annual UN estimates: ~132M births/yr (~4.186/sec), ~62M deaths/yr (~1.966/sec), net ~2.22/sec
+const BIRTHS_PER_SEC = 4.186;
+const DEATHS_PER_SEC = 1.966;
+const NET_POP_PER_SEC = BIRTHS_PER_SEC - DEATHS_PER_SEC;
+// Global annual GDP ~$115.4 Trillion -> ~$3.659M per second (~$0.003659B/sec)
+const GLOBAL_GDP_BILLIONS_PER_SEC = 115_400 / (365.25 * 86400);
+
+export function computeLiveWorldCounters(nowMs: number): LiveWorldCounters {
+  const safeMs = Number.isFinite(nowMs) ? nowMs : EPOCH_2026_MS;
+  const elapsedSinceEpochSec = Math.max(0, (safeMs - EPOCH_2026_MS) / 1000);
+
+  const nowDate = new Date(safeMs);
+  const startOfUtcDayMs = Date.UTC(
+    nowDate.getUTCFullYear(),
+    nowDate.getUTCMonth(),
+    nowDate.getUTCDate()
+  );
+  const secondsToday = Math.max(0, (safeMs - startOfUtcDayMs) / 1000);
+
+  const birthsToday = Math.floor(secondsToday * BIRTHS_PER_SEC);
+  const deathsToday = Math.floor(secondsToday * DEATHS_PER_SEC);
+  const netGrowthToday = birthsToday - deathsToday;
+  const worldPopulation = Math.floor(
+    BASE_WORLD_POP_2026 + elapsedSinceEpochSec * NET_POP_PER_SEC
+  );
+  const globalGdpTodayBillions = Number(
+    (secondsToday * GLOBAL_GDP_BILLIONS_PER_SEC).toFixed(3)
+  );
+
+  return {
+    worldPopulation,
+    birthsToday,
+    deathsToday,
+    netGrowthToday,
+    globalGdpTodayBillions,
+    timestampIso: nowDate.toISOString(),
+  };
+}
+
+export function computeWorkingAgeShare(ageBrackets: AgeBracket[]): number {
+  const workingGroups = new Set(['15-24', '25-34', '35-44', '45-54', '55-64']);
+  const sum = ageBrackets.reduce((acc, b) => {
+    if (workingGroups.has(b.group)) {
+      return acc + b.malePct + b.femalePct;
+    }
+    return acc;
+  }, 0);
+  return Number(sum.toFixed(1));
+}
+
+export function computeDependencyRatio(ageBrackets: AgeBracket[]): number {
+  const working = computeWorkingAgeShare(ageBrackets);
+  if (working <= 0) return 0;
+  const dependent = ageBrackets.reduce((acc, b) => {
+    if (b.group === '0-14' || b.group === '65+') {
+      return acc + b.malePct + b.femalePct;
+    }
+    return acc;
+  }, 0);
+  return Number(((dependent / working) * 100).toFixed(1));
+}
+
+export function computeProjectedChange2050Pct(country: CountryRecord): number {
+  const p2025 = country.projections.find((p) => p.year === 2025)?.medium ?? country.populationMillions;
+  const p2050 = country.projections.find((p) => p.year === 2050)?.medium ?? p2025;
+  if (p2025 <= 0) return 0;
+  return Number((((p2050 - p2025) / p2025) * 100).toFixed(1));
+}
+
+export function computeProjectedGdpGrowth10YrPct(country: CountryRecord): number {
+  const gdp2025 = country.gdpHistory.find((p) => p.year === 2025)?.gdpTrillions ?? country.gdpTrillions;
+  const gdp2035 = country.gdpHistory.find((p) => p.year === 2035)?.gdpTrillions;
+  if (gdp2025 <= 0) return 0;
+  if (gdp2035 !== undefined) {
+    return Number((((gdp2035 - gdp2025) / gdp2025) * 100).toFixed(1));
+  }
+  return Number(((Math.pow(1 + country.gdpGrowthPct / 100, 10) - 1) * 100).toFixed(1));
+}
+
+export interface GdpTrajectoryPoint10Yr {
+  year: number;
+  gdpTrillions: number;
+  cumulativeGrowthPct: number;
+  annualGrowthPct: number;
+}
+
+/**
+ * Generates an annual 10-year projected GDP trajectory (2025–2035) anchored
+ * to the country's 2025, 2030, and 2035 nominal GDP checkpoints so the 2035
+ * cumulative growth aligns exactly with computeProjectedGdpGrowth10YrPct.
+ */
+export function computeProjectedGdpTrajectory10Yr(
+  country: CountryRecord
+): GdpTrajectoryPoint10Yr[] {
+  const gdp2025 =
+    country.gdpHistory.find((p) => p.year === 2025)?.gdpTrillions ??
+    country.gdpTrillions;
+  if (gdp2025 <= 0) return [];
+
+  const fallbackRate = country.gdpGrowthPct / 100;
+  const gdp2030 =
+    country.gdpHistory.find((p) => p.year === 2030)?.gdpTrillions ??
+    gdp2025 * Math.pow(1 + fallbackRate, 5);
+  const gdp2035 =
+    country.gdpHistory.find((p) => p.year === 2035)?.gdpTrillions ??
+    gdp2025 * Math.pow(1 + fallbackRate, 10);
+
+  const cagrFirst5 = Math.pow(gdp2030 / gdp2025, 1 / 5) - 1;
+  const cagrSecond5 = Math.pow(gdp2035 / gdp2030, 1 / 5) - 1;
+
+  const points: GdpTrajectoryPoint10Yr[] = [];
+  for (let year = 2025; year <= 2035; year += 1) {
+    let rawGdp: number;
+    let annualRate: number;
+    if (year === 2025) {
+      rawGdp = gdp2025;
+      annualRate = country.gdpGrowthPct / 100;
+    } else if (year <= 2030) {
+      rawGdp = gdp2025 * Math.pow(1 + cagrFirst5, year - 2025);
+      annualRate = cagrFirst5;
+    } else {
+      rawGdp = gdp2030 * Math.pow(1 + cagrSecond5, year - 2030);
+      annualRate = cagrSecond5;
+    }
+
+    const cumulativeGrowthPct = Number((((rawGdp - gdp2025) / gdp2025) * 100).toFixed(1));
+    points.push({
+      year,
+      gdpTrillions: Number(rawGdp.toFixed(2)),
+      cumulativeGrowthPct,
+      annualGrowthPct: Number((annualRate * 100).toFixed(2)),
+    });
+  }
+
+  return points;
+}
+
+export function computePearsonCorrelation(
+  points: Array<{ x: number; y: number }>
+): RegressionResult {
+  const n = points.length;
+  if (n < 2) {
+    return {
+      r: 0,
+      rSquared: 0,
+      slope: 0,
+      intercept: 0,
+      interpretation: 'Insufficient data points',
+    };
+  }
+
+  let sumX = 0;
+  let sumY = 0;
+  for (const pt of points) {
+    sumX += pt.x;
+    sumY += pt.y;
+  }
+  const meanX = sumX / n;
+  const meanY = sumY / n;
+
+  let numerator = 0;
+  let denomX = 0;
+  let denomY = 0;
+  for (const pt of points) {
+    const dx = pt.x - meanX;
+    const dy = pt.y - meanY;
+    numerator += dx * dy;
+    denomX += dx * dx;
+    denomY += dy * dy;
+  }
+
+  if (denomX === 0 || denomY === 0) {
+    return {
+      r: 0,
+      rSquared: 0,
+      slope: 0,
+      intercept: meanY,
+      interpretation: 'No variance along axis',
+    };
+  }
+
+  const r = numerator / Math.sqrt(denomX * denomY);
+  const rSquared = r * r;
+  const slope = numerator / denomX;
+  const intercept = meanY - slope * meanX;
+
+  const absR = Math.abs(r);
+  const direction = r >= 0 ? 'positive' : 'negative';
+  let strength = 'weak';
+  if (absR >= 0.7) strength = 'strong';
+  else if (absR >= 0.4) strength = 'moderate';
+
+  return {
+    r: Number(r.toFixed(3)),
+    rSquared: Number(rSquared.toFixed(3)),
+    slope: Number(slope.toFixed(4)),
+    intercept: Number(intercept.toFixed(2)),
+    interpretation: `${strength.charAt(0).toUpperCase() + strength.slice(1)} ${direction} correlation`,
+  };
+}
+
+export interface CityFilterOptions {
+  search: string;
+  region: Region | 'All';
+  countryCode: string | 'All';
+  sortBy: 'population' | 'gdpBillions' | 'gdpPerCapita' | 'medianAge' | 'annualPopGrowthPct' | 'densityPerKm2' | 'name';
+  sortDir: 'asc' | 'desc';
+}
+
+export function filterAndSortCities(
+  cities: CityRecord[],
+  options: CityFilterOptions
+): CityRecord[] {
+  const q = options.search.trim().toLowerCase();
+
+  const filtered = cities.filter((city) => {
+    if (options.region !== 'All' && city.region !== options.region) return false;
+    if (options.countryCode !== 'All' && city.countryCode !== options.countryCode) return false;
+    if (q) {
+      const hay = `${city.name} ${city.countryName} ${city.primarySector} ${city.region}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  return [...filtered].sort((a, b) => {
+    const dir = options.sortDir === 'asc' ? 1 : -1;
+    if (options.sortBy === 'name') {
+      return a.name.localeCompare(b.name) * dir;
+    }
+    return (a[options.sortBy] - b[options.sortBy]) * dir;
+  });
+}
+
+export interface ComparisonMetricRow {
+  key: string;
+  label: string;
+  unit: string;
+  higherIsBetter?: boolean;
+  values: Array<{
+    cityId: string;
+    raw: number;
+    formatted: string;
+    deltaFromFirstPct: number | null;
+    isHighest: boolean;
+    isLowest: boolean;
+  }>;
+}
+
+export function computeCityComparisonMatrix(
+  selectedCities: CityRecord[],
+  countryByCode: Map<string, CountryRecord>
+): ComparisonMetricRow[] {
+  if (selectedCities.length === 0) return [];
+
+  const specs: Array<{
+    key: string;
+    label: string;
+    unit: string;
+    higherIsBetter?: boolean;
+    extract: (c: CityRecord) => number;
+    format: (v: number) => string;
+  }> = [
+    {
+      key: 'population',
+      label: 'City Population',
+      unit: 'residents',
+      extract: (c) => c.population,
+      format: (v) => formatCompactNumber(v),
+    },
+    {
+      key: 'metroPopulation',
+      label: 'Metro Population',
+      unit: 'residents',
+      extract: (c) => c.metroPopulation,
+      format: (v) => formatCompactNumber(v),
+    },
+    {
+      key: 'gdpBillions',
+      label: 'City GDP Output',
+      unit: 'USD',
+      higherIsBetter: true,
+      extract: (c) => c.gdpBillions,
+      format: (v) => `$${v.toLocaleString('en-US')}B`,
+    },
+    {
+      key: 'gdpPerCapita',
+      label: 'GDP per Capita',
+      unit: 'USD',
+      higherIsBetter: true,
+      extract: (c) => c.gdpPerCapita,
+      format: (v) => `$${v.toLocaleString('en-US')}`,
+    },
+    {
+      key: 'nationalGdpShare',
+      label: 'Share of National GDP',
+      unit: '%',
+      extract: (c) => {
+        const country = countryByCode.get(c.countryCode);
+        if (!country || country.gdpTrillions <= 0) return 0;
+        return Number(((c.gdpBillions / (country.gdpTrillions * 1000)) * 100).toFixed(1));
+      },
+      format: (v) => `${v.toFixed(1)}%`,
+    },
+    {
+      key: 'medianAge',
+      label: 'Median Age',
+      unit: 'years',
+      extract: (c) => c.medianAge,
+      format: (v) => `${v.toFixed(1)} yrs`,
+    },
+    {
+      key: 'seniorShare',
+      label: 'Senior Share (65+)',
+      unit: '%',
+      extract: (c) => c.ageBreakdown.age65plus,
+      format: (v) => `${v.toFixed(1)}%`,
+    },
+    {
+      key: 'youthShare',
+      label: 'Youth Share (0–14)',
+      unit: '%',
+      extract: (c) => c.ageBreakdown.age0to14,
+      format: (v) => `${v.toFixed(1)}%`,
+    },
+    {
+      key: 'densityPerKm2',
+      label: 'Population Density',
+      unit: '/km²',
+      extract: (c) => c.densityPerKm2,
+      format: (v) => `${v.toLocaleString('en-US')}/km²`,
+    },
+    {
+      key: 'annualPopGrowthPct',
+      label: 'Annual Pop Growth',
+      unit: '%',
+      extract: (c) => c.annualPopGrowthPct,
+      format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`,
+    },
+    {
+      key: 'projected2050',
+      label: '2050 Projected Pop',
+      unit: 'residents',
+      extract: (c) => c.projected2050,
+      format: (v) => formatCompactNumber(v),
+    },
+    {
+      key: 'unemploymentPct',
+      label: 'Unemployment Rate',
+      unit: '%',
+      higherIsBetter: false,
+      extract: (c) => c.unemploymentPct,
+      format: (v) => `${v.toFixed(1)}%`,
+    },
+  ];
+
+  return specs.map((spec) => {
+    const raws = selectedCities.map(spec.extract);
+    const maxVal = Math.max(...raws);
+    const minVal = Math.min(...raws);
+    const baseline = raws[0];
+
+    return {
+      key: spec.key,
+      label: spec.label,
+      unit: spec.unit,
+      higherIsBetter: spec.higherIsBetter,
+      values: selectedCities.map((city, idx) => {
+        const raw = raws[idx];
+        let deltaFromFirstPct: number | null = null;
+        if (idx > 0 && baseline !== 0) {
+          deltaFromFirstPct = Number((((raw - baseline) / Math.abs(baseline)) * 100).toFixed(1));
+        }
+        return {
+          cityId: city.id,
+          raw,
+          formatted: spec.format(raw),
+          deltaFromFirstPct,
+          isHighest: selectedCities.length > 1 && raw === maxVal && maxVal !== minVal,
+          isLowest: selectedCities.length > 1 && raw === minVal && maxVal !== minVal,
+        };
+      }),
+    };
+  });
+}
+
+export function formatCompactNumber(value: number): string {
+  if (Math.abs(value) >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (Math.abs(value) >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(2)}M`;
+  }
+  if (Math.abs(value) >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+  return value.toLocaleString('en-US');
+}
+
+export function formatCurrency(value: number): string {
+  return `$${Math.round(value).toLocaleString('en-US')}`;
+}
+
+export function formatSignedPct(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+export function escapeCsvCell(value: string | number | null | undefined): string {
+  const str = value === null || value === undefined ? '' : String(value);
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export function rowsToCsv(headers: string[], rows: Array<Array<string | number>>): string {
+  const lines = [
+    headers.map(escapeCsvCell).join(','),
+    ...rows.map((row) => row.map(escapeCsvCell).join(',')),
+  ];
+  return lines.join('\n');
+}
+
+export function buildCountriesCsv(countries: CountryRecord[]): string {
+  const headers = [
+    'Code',
+    'Country',
+    'Region',
+    'Population (M)',
+    'Annual Pop Growth (%)',
+    'GDP (USD Trillions)',
+    'GDP per Capita (USD)',
+    'GDP Growth (%)',
+    '10-Yr Projected GDP Growth (%)',
+    'Median Age (Years)',
+    'Working Age 15-64 (%)',
+    'Dependency Ratio',
+    'Fertility Rate',
+    'Life Expectancy (Years)',
+    'Urbanization (%)',
+    '2050 Projected Pop (M)',
+    'Data Source',
+  ];
+
+  const rows = countries.map((c) => {
+    const p2050 = c.projections.find((p) => p.year === 2050)?.medium ?? c.populationMillions;
+    return [
+      c.code,
+      c.name,
+      c.region,
+      c.populationMillions,
+      c.annualPopGrowthPct,
+      c.gdpTrillions,
+      c.gdpPerCapita,
+      c.gdpGrowthPct,
+      computeProjectedGdpGrowth10YrPct(c),
+      c.medianAge,
+      computeWorkingAgeShare(c.ageBrackets),
+      computeDependencyRatio(c.ageBrackets),
+      c.fertilityRate,
+      c.lifeExpectancy,
+      c.urbanizationPct,
+      p2050,
+      getCountrySourceCitation(c.code),
+    ];
+  });
+
+  return rowsToCsv(headers, rows);
+}
+
+export function buildCitiesCsv(cities: CityRecord[]): string {
+  const headers = [
+    'City',
+    'Country',
+    'Region',
+    'Population',
+    'Metro Population',
+    'Density (/km2)',
+    'City GDP ($B)',
+    'GDP per Capita ($)',
+    'Median Age',
+    'Age 0-14 (%)',
+    'Age 15-24 (%)',
+    'Age 25-44 (%)',
+    'Age 45-64 (%)',
+    'Age 65+ (%)',
+    'Annual Growth (%)',
+    '2035 Projected',
+    '2050 Projected',
+    'Primary Sector',
+    'Data Source',
+  ];
+
+  const rows = cities.map((c) => [
+    c.name,
+    c.countryName,
+    c.region,
+    c.population,
+    c.metroPopulation,
+    c.densityPerKm2,
+    c.gdpBillions,
+    c.gdpPerCapita,
+    c.medianAge,
+    c.ageBreakdown.age0to14,
+    c.ageBreakdown.age15to24,
+    c.ageBreakdown.age25to44,
+    c.ageBreakdown.age45to64,
+    c.ageBreakdown.age65plus,
+    c.annualPopGrowthPct,
+    c.projected2035,
+    c.projected2050,
+    c.primarySector,
+    getCitySourceCitation(c.countryCode),
+  ]);
+
+  return rowsToCsv(headers, rows);
+}
+
+export function buildComparisonCsv(
+  selectedCities: CityRecord[],
+  countryByCode: Map<string, CountryRecord>
+): string {
+  const matrix = computeCityComparisonMatrix(selectedCities, countryByCode);
+  const headers = ['Metric', 'Unit', ...selectedCities.map((c) => `${c.name} (${c.countryCode})`)];
+  const rows = [
+    ...matrix.map((row) => [
+      row.label,
+      row.unit,
+      ...row.values.map((v) => v.formatted),
+    ]),
+    [
+      'Official National Agency',
+      'agency',
+      ...selectedCities.map(
+        (c) => NATIONAL_OFFICE_BY_COUNTRY[c.countryCode]?.shortName ?? `${c.countryName} NSO`
+      ),
+    ],
+    [
+      'Official Data Year',
+      'year',
+      ...selectedCities.map(
+        (c) => NATIONAL_OFFICE_BY_COUNTRY[c.countryCode]?.cityDataYear ?? '2024'
+      ),
+    ],
+    [
+      'Data Source Footprint',
+      'sources',
+      ...selectedCities.map((c) => getCitySourceCitation(c.countryCode)),
+    ],
+  ];
+  return rowsToCsv(headers, rows);
+}
+
+export interface GlobalSearchResults {
+  countries: CountryRecord[];
+  cities: CityRecord[];
+  totalMatches: number;
+}
+
+/**
+ * Ranks matching countries and cities by relevance (exact/prefix name match >
+ * substring match > ISO code / country / sector match, tie-broken by scale).
+ */
+export function searchGlobalEntities(
+  rawQuery: string,
+  countries: CountryRecord[],
+  cities: CityRecord[],
+  limits: { maxCountries?: number; maxCities?: number } = {}
+): GlobalSearchResults {
+  const query = rawQuery.trim().toLowerCase();
+  const maxCountries = limits.maxCountries ?? 5;
+  const maxCities = limits.maxCities ?? 8;
+
+  if (!query) {
+    return { countries: [], cities: [], totalMatches: 0 };
+  }
+
+  const scoredCountries: Array<{ item: CountryRecord; score: number }> = [];
+  for (const country of countries) {
+    const name = country.name.toLowerCase();
+    const code = country.code.toLowerCase();
+    const region = country.region.toLowerCase();
+
+    let score = 0;
+    if (name === query || code === query) {
+      score = 100;
+    } else if (name.startsWith(query)) {
+      score = 80;
+    } else if (code.startsWith(query)) {
+      score = 70;
+    } else if (name.includes(query)) {
+      score = 55;
+    } else if (region.includes(query)) {
+      score = 30;
+    }
+
+    if (score > 0) {
+      scoredCountries.push({ item: country, score });
+    }
+  }
+
+  scoredCountries.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.item.gdpTrillions - a.item.gdpTrillions;
+  });
+
+  const scoredCities: Array<{ item: CityRecord; score: number }> = [];
+  for (const city of cities) {
+    const name = city.name.toLowerCase();
+    const countryName = city.countryName.toLowerCase();
+    const countryCode = city.countryCode.toLowerCase();
+    const sector = city.primarySector.toLowerCase();
+
+    let score = 0;
+    if (name === query) {
+      score = 100;
+    } else if (name.startsWith(query)) {
+      score = 85;
+    } else if (name.includes(query)) {
+      score = 65;
+    } else if (countryName === query || countryCode === query) {
+      score = 50;
+    } else if (countryName.startsWith(query)) {
+      score = 45;
+    } else if (countryName.includes(query)) {
+      score = 35;
+    } else if (sector.includes(query)) {
+      score = 25;
+    }
+
+    if (score > 0) {
+      scoredCities.push({ item: city, score });
+    }
+  }
+
+  scoredCities.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.item.population - a.item.population;
+  });
+
+  return {
+    countries: scoredCountries.slice(0, maxCountries).map((s) => s.item),
+    cities: scoredCities.slice(0, maxCities).map((s) => s.item),
+    totalMatches: scoredCountries.length + scoredCities.length,
+  };
+}
+
