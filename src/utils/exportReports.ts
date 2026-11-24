@@ -5,6 +5,8 @@ import {
   type CityRecord,
   type CountryRecord,
   type DataYear,
+  type TradeReferenceSource,
+  type TradeYear,
 } from '../types/worldStats';
 import {
   buildCitiesCsv,
@@ -18,6 +20,14 @@ import {
   formatCurrency,
   formatSignedPct,
 } from './analytics';
+import {
+  buildCountryTradeDetailCsv,
+  buildTradeLedgerCsv,
+  formatSignedTradeBillions,
+  formatTradeBillions,
+  type ResolvedCountryTradeRow,
+  type TradeSourceReconciliation,
+} from './tradeAnalytics';
 import {
   formatCityDataYear,
   getComparisonSourceFootprint,
@@ -119,25 +129,24 @@ export function exportGlobalOverviewPdf(
       'Pop (M)',
       'GDP ($T)',
       'GDP / Cap',
-      `10-Yr GDP (${dataYear}–${dataYear + 10})`,
-      'Median Age',
-      'Working Age',
-      '2050 Proj (M)',
+      `10-Yr GDP`,
+      'Med. Age',
+      'HDI',
+      'CO2/Cap',
+      'Renew %',
     ]],
-    body: countries.map((c) => {
-      const p2050 = c.projections.find((p) => p.year === 2050)?.medium ?? c.populationMillions;
-      return [
-        c.name,
-        c.region,
-        c.populationMillions.toFixed(1),
-        `$${c.gdpTrillions.toFixed(2)}T`,
-        formatCurrency(c.gdpPerCapita),
-        formatSignedPct(computeProjectedGdpGrowth10YrPct(c, dataYear)),
-        `${c.medianAge.toFixed(1)} yrs`,
-        `${computeWorkingAgeShare(c.ageBrackets)}%`,
-        p2050.toFixed(1),
-      ];
-    }),
+    body: countries.map((c) => [
+      c.name,
+      c.region,
+      c.populationMillions.toFixed(1),
+      `$${c.gdpTrillions.toFixed(2)}T`,
+      formatCurrency(c.gdpPerCapita),
+      formatSignedPct(computeProjectedGdpGrowth10YrPct(c, dataYear)),
+      `${c.medianAge.toFixed(1)}y`,
+      c.indicators.hdiScore.toFixed(3),
+      `${c.indicators.co2PerCapitaTons.toFixed(1)}t`,
+      `${c.indicators.renewableEnergyPct.toFixed(0)}%`,
+    ]),
     styles: { fontSize: 8.5, cellPadding: 2.5 },
     headStyles: { fillColor: [15, 23, 42], textColor: [241, 245, 249] },
     alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -174,6 +183,8 @@ export function exportCountryDetailPdf(
       ['Median Age', `${country.medianAge.toFixed(1)} years`, 'Working Age (15-64)', `${computeWorkingAgeShare(country.ageBrackets)}%`],
       ['Dependency Ratio', `${computeDependencyRatio(country.ageBrackets)}`, 'Life Expectancy', `${country.lifeExpectancy.toFixed(1)} years`],
       ['Fertility Rate', `${country.fertilityRate.toFixed(2)} births/woman`, `10-Yr GDP (${dataYear}–${dataYear + 10})`, formatSignedPct(computeProjectedGdpGrowth10YrPct(country, dataYear))],
+      ['HDI / Gini Index', `${country.indicators.hdiScore.toFixed(3)} / ${country.indicators.giniIndex.toFixed(1)}`, 'Health / R&D (% GDP)', `${country.indicators.healthExpenditurePctGdp}% / ${country.indicators.rdExpenditurePctGdp}%`],
+      ['CO2 per Capita', `${country.indicators.co2PerCapitaTons} t/yr`, 'Renewable Electricity', `${country.indicators.renewableEnergyPct}%`],
     ],
     styles: { fontSize: 8.5, cellPadding: 2.5 },
     headStyles: { fillColor: [15, 23, 42], textColor: [241, 245, 249] },
@@ -319,6 +330,161 @@ export function exportComparisonPdf(
   );
   const slug = selectedCities.map((c) => c.name.toLowerCase().replace(/[^a-z0-9]+/g, '')).join('-vs-');
   const filename = `worldstats-comparison-${slug || 'cities'}-${dataYear}.pdf`;
+  doc.save(filename);
+  return filename;
+}
+
+export function exportTradeLedgerAsCsv(
+  rows: ResolvedCountryTradeRow[],
+  requestedYear: TradeYear,
+  reference: TradeReferenceSource
+): string {
+  const csv = buildTradeLedgerCsv(rows, requestedYear, reference);
+  const filename = `worldstats-global-trade-${reference}-${requestedYear}.csv`;
+  triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
+  return filename;
+}
+
+export function exportCountryTradeDetailAsCsv(
+  row: ResolvedCountryTradeRow,
+  reconciliation: TradeSourceReconciliation
+): string {
+  const csv = buildCountryTradeDetailCsv(row, reconciliation);
+  const filename = `worldstats-trade-${row.countryCode.toLowerCase()}-${row.reference}-${row.effectiveYear}.csv`;
+  triggerDownload(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
+  return filename;
+}
+
+export function exportTradeReportPdf(
+  focusedRow: ResolvedCountryTradeRow,
+  reconciliation: TradeSourceReconciliation,
+  allRows: ResolvedCountryTradeRow[]
+): string {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const refLabel =
+    focusedRow.reference === 'global'
+      ? 'Global Harmonized (WTO / UN Comtrade / IMF DOTS)'
+      : `Official National Customs (${focusedRow.sourceMeta.shortName})`;
+
+  addPdfHeader(
+    doc,
+    `${focusedRow.countryName} & Global Export-Import Trade Briefing (${focusedRow.effectiveYear})`,
+    `Active Reference: ${refLabel} · Requested: ${focusedRow.requestedYear}${focusedRow.usedFallback ? ` (Fallback to ${focusedRow.effectiveYear})` : ''} · Generated ${dateStr}`
+  );
+
+  autoTable(doc, {
+    startY: 36,
+    head: [[
+      'Reference Source',
+      'Effective Year',
+      'Goods Exports',
+      'Goods Imports',
+      'Merch. Balance',
+      'Services Exp / Imp',
+      'Combined Balance',
+      'Valuation Basis',
+    ]],
+    body: reconciliation.rows.map((r) => [
+      r.shortName,
+      r.usedFallback ? `${r.vintageLabel} (Fallback)` : r.vintageLabel,
+      formatTradeBillions(r.goodsExports),
+      formatTradeBillions(r.goodsImports),
+      formatSignedTradeBillions(r.merchandiseBalance),
+      `${formatTradeBillions(r.servicesExports)} / ${formatTradeBillions(r.servicesImports)}`,
+      formatSignedTradeBillions(r.combinedBalance),
+      r.valuationBasis,
+    ]),
+    styles: { fontSize: 8, cellPadding: 2.3 },
+    headStyles: { fillColor: [15, 23, 42], textColor: [241, 245, 249] },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+  });
+
+  const afterReconY = (doc as unknown as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 76;
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(10.5);
+  doc.text(
+    `${focusedRow.countryName} Top 10 Bilateral Trading Partners & Detailed HS2022 Items (${focusedRow.effectiveYear})`,
+    14,
+    afterReconY + 8
+  );
+
+  autoTable(doc, {
+    startY: afterReconY + 11,
+    head: [[
+      'Partner (Top 10)',
+      'Exports ($B)',
+      'Imports ($B)',
+      'Bilateral Bal.',
+      'Detailed Export Item (HS2022)',
+      'Exp Value',
+      'Detailed Import Item (HS2022)',
+      'Imp Value',
+    ]],
+    body: focusedRow.partnerFlows.slice(0, 10).map((p, idx) => {
+      const expItem = focusedRow.detailedExportItems[idx];
+      const impItem = focusedRow.detailedImportItems[idx];
+      return [
+        `${idx + 1}. ${p.partnerName}`,
+        formatTradeBillions(p.exportsBillions),
+        formatTradeBillions(p.importsBillions),
+        formatSignedTradeBillions(p.bilateralBalanceBillions),
+        expItem ? `${expItem.hsCode} · ${expItem.itemName}` : '—',
+        expItem ? `${formatTradeBillions(expItem.valueBillions)} (${expItem.sharePct}%)` : '—',
+        impItem ? `${impItem.hsCode} · ${impItem.itemName}` : '—',
+        impItem ? `${formatTradeBillions(impItem.valueBillions)} (${impItem.sharePct}%)` : '—',
+      ];
+    }),
+    styles: { fontSize: 7.2, cellPadding: 1.9 },
+    headStyles: { fillColor: [30, 41, 59], textColor: [241, 245, 249] },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+  });
+
+  doc.addPage('a4', 'landscape');
+  addPdfHeader(
+    doc,
+    `Global Export & Import Ledger (${allRows.length} Economies · Requested ${focusedRow.requestedYear})`,
+    `Active Reference: ${focusedRow.reference === 'global' ? 'Global Harmonized (WTO / UN Comtrade)' : 'Official National Customs / NSO'} · Auto-fallback to prior year when ${focusedRow.requestedYear} pending`
+  );
+
+  autoTable(doc, {
+    startY: 36,
+    head: [[
+      'Country',
+      'Region',
+      'Data Yr',
+      'Goods Exp',
+      'Goods Imp',
+      'Merch. Bal.',
+      'Services Exp',
+      'Combined Bal.',
+      'Trade % GDP',
+      'Source Agency',
+    ]],
+    body: allRows.map((r) => [
+      r.countryName,
+      r.region,
+      r.usedFallback ? `${r.effectiveYear}*` : String(r.effectiveYear),
+      formatTradeBillions(r.goodsExports),
+      formatTradeBillions(r.goodsImports),
+      formatSignedTradeBillions(r.merchandiseBalance),
+      formatTradeBillions(r.servicesExports),
+      formatSignedTradeBillions(r.combinedBalance),
+      `${r.tradeToGdpPct.toFixed(1)}%`,
+      r.sourceMeta.shortName,
+    ]),
+    styles: { fontSize: 7.5, cellPadding: 2 },
+    headStyles: { fillColor: [15, 23, 42], textColor: [241, 245, 249] },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+  });
+
+  addPdfSourceFooter(
+    doc,
+    `Global: WTO / UN Comtrade / IMF DOTS · National: ${focusedRow.sourceMeta.shortName} & 48 Customs Authorities (* = Auto-fallback to latest prior available year)`
+  );
+
+  const filename = `worldstats-trade-${focusedRow.countryCode.toLowerCase()}-${focusedRow.reference}-${focusedRow.effectiveYear}.pdf`;
   doc.save(filename);
   return filename;
 }

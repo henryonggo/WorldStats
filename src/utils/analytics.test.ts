@@ -16,11 +16,14 @@ import {
   resolveEffectiveAppearance,
 } from '../data/themes';
 import {
+  buildAiContextSnapshot,
+  buildAppUrlSearch,
   buildCitiesCsv,
   buildComparisonCsv,
   buildCountriesCsv,
   computeCityComparisonMatrix,
   computeDependencyRatio,
+  computeGlobalIndicatorAverages,
   computeLiveWorldCounters,
   computePearsonCorrelation,
   computeProjectedChange2050Pct,
@@ -29,6 +32,7 @@ import {
   computeWorkingAgeShare,
   escapeCsvCell,
   filterAndSortCities,
+  parseAppUrlState,
   projectCitiesForYear,
   projectCountriesForYear,
   projectCountryForYear,
@@ -185,7 +189,7 @@ test('filterAndSortCities filters by search, region, country and sorts correctly
     sortBy: 'gdpPerCapita',
     sortDir: 'desc',
   });
-  assert.equal(usCities.length, 4);
+  assert.equal(usCities.length, 5);
   assert.equal(usCities[0].id, 'usa-sfo');
 
   const munichSearch = filterAndSortCities(CITIES, {
@@ -336,3 +340,106 @@ test('DESIGN_THEMES and appearance mode resolvers support Light/Dark/System and 
   assert.equal(resolveEffectiveAppearance('system', true), 'dark');
   assert.equal(resolveEffectiveAppearance('system', false), 'light');
 });
+
+test('expanded dataset covers 48 economies and 138 unique cities with valid age totals & indicators', () => {
+  assert.equal(COUNTRIES.length, 48);
+  assert.equal(CITIES.length, 138);
+
+  const countryCodes = new Set(COUNTRIES.map((c) => c.code));
+  assert.equal(countryCodes.size, 48, 'All 48 country codes must be unique');
+
+  const cityIds = new Set(CITIES.map((c) => c.id));
+  assert.equal(cityIds.size, 138, 'All 138 city IDs must be unique');
+
+  for (const country of COUNTRIES) {
+    const bracketSum = country.ageBrackets.reduce((s, b) => s + b.malePct + b.femalePct, 0);
+    assert.ok(Math.abs(bracketSum - 100) < 0.3, `Expected age brackets for ${country.code} to sum to 100, got ${bracketSum}`);
+    assert.ok(country.indicators, `Missing indicators for ${country.code}`);
+    assert.ok(country.indicators.hdiScore > 0.4 && country.indicators.hdiScore < 1.0);
+    assert.ok(country.indicators.giniIndex > 20 && country.indicators.giniIndex < 70);
+    assert.ok(country.indicators.renewableEnergyPct >= 0 && country.indicators.renewableEnergyPct <= 100);
+  }
+
+  for (const city of CITIES) {
+    assert.ok(countryCodes.has(city.countryCode), `City ${city.id} references unknown country ${city.countryCode}`);
+    const ageSum =
+      city.ageBreakdown.age0to14 +
+      city.ageBreakdown.age15to24 +
+      city.ageBreakdown.age25to44 +
+      city.ageBreakdown.age45to64 +
+      city.ageBreakdown.age65plus;
+    assert.ok(Math.abs(ageSum - 100) < 0.3, `Expected age breakdown for ${city.name} (${city.id}) to sum to 100, got ${ageSum}`);
+  }
+});
+
+test('multi-lens sorting, global indicator averages, and CSV export cover Health/Energy/Inequality', () => {
+  const countries2026 = projectCountriesForYear(COUNTRIES, 2026);
+  const avgs = computeGlobalIndicatorAverages(countries2026);
+  assert.ok(avgs.hdiScore > 0.75 && avgs.hdiScore < 0.92);
+  assert.ok(avgs.renewableEnergyPct > 25 && avgs.renewableEnergyPct < 65);
+
+  const byHdiDesc = sortCountries(countries2026, 'hdiScore', 'desc', 2026);
+  assert.ok(byHdiDesc[0].indicators.hdiScore >= byHdiDesc[1].indicators.hdiScore);
+  assert.ok(['CHE', 'NOR'].includes(byHdiDesc[0].code));
+
+  const byRenewDesc = sortCountries(countries2026, 'renewableEnergyPct', 'desc', 2026);
+  assert.ok(['NOR', 'ETH', 'BRA'].includes(byRenewDesc[0].code));
+
+  const byGiniDesc = sortCountries(countries2026, 'giniIndex', 'desc', 2026);
+  assert.equal(byGiniDesc[0].code, 'ZAF');
+
+  const csv = buildCountriesCsv(countries2026.slice(0, 5), 2026);
+  assert.ok(csv.includes('HDI Score'));
+  assert.ok(csv.includes('Renewable Electricity (%)'));
+  assert.ok(csv.includes('Gini Index'));
+});
+
+test('URL deep-link serialization/parsing and AI context snapshot work deterministically', () => {
+  const validCodes = new Set(COUNTRIES.map((c) => c.code));
+  const validCities = new Set(CITIES.map((c) => c.id));
+
+  const countrySearch = buildAppUrlSearch({
+    view: 'country',
+    year: 2025,
+    countryCode: 'CHE',
+    cityId: null,
+    compareCityIds: ['idn-jkt', 'can-tor'],
+  });
+  assert.equal(countrySearch, '?view=country&year=2025&country=CHE');
+
+  const parsedCountry = parseAppUrlState(countrySearch, validCodes, validCities);
+  assert.equal(parsedCountry.view, 'country');
+  assert.equal(parsedCountry.year, 2025);
+  assert.equal(parsedCountry.countryCode, 'CHE');
+
+  const compareSearch = buildAppUrlSearch({
+    view: 'compare',
+    year: 2026,
+    countryCode: 'JPN',
+    cityId: null,
+    compareCityIds: ['idn-jkt', 'can-tor', 'che-zrh'],
+  });
+  const parsedCompare = parseAppUrlState(compareSearch, validCodes, validCities);
+  assert.equal(parsedCompare.view, 'compare');
+  assert.deepEqual(parsedCompare.compareCityIds, ['idn-jkt', 'can-tor', 'che-zrh']);
+
+  // Reject invalid params safely
+  const parsedInvalid = parseAppUrlState('?view=hack&year=1999&country=ZZZ&cities=bad-id,idn-jkt', validCodes, validCities);
+  assert.equal(parsedInvalid.view, undefined);
+  assert.equal(parsedInvalid.year, undefined);
+  assert.equal(parsedInvalid.countryCode, undefined);
+  assert.deepEqual(parsedInvalid.compareCityIds, ['idn-jkt']);
+
+  const snapshot = buildAiContextSnapshot(COUNTRIES, CITIES, {
+    activeView: 'country',
+    dataYear: 2026,
+    selectedCountryCode: 'IDN',
+    selectedCityId: 'idn-jkt',
+    compareCityIds: ['idn-jkt', 'can-tor'],
+  });
+  assert.ok(snapshot.includes('Tracked Economies: 48'));
+  assert.ok(snapshot.includes('Tracked Cities: 138'));
+  assert.ok(snapshot.includes('CHE|Switzerland'));
+  assert.ok(snapshot.includes('idn-jkt|Jakarta'));
+});
+

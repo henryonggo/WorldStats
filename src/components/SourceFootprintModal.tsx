@@ -26,6 +26,12 @@ const HIGHLIGHTED_NATIONAL_CODES = [
   'BRA',
   'NGA',
   'SGP',
+  'CHE',
+  'NLD',
+  'SWE',
+  'NOR',
+  'ARE',
+  'COL',
 ];
 
 export function SourceFootprintModal({ open, dataYear, onClose }: SourceFootprintModalProps) {
@@ -158,10 +164,10 @@ export function SourceFootprintModal({ open, dataYear, onClose }: SourceFootprin
           {/* National Statistical Offices for City-Level Detail */}
           <div>
             <h3 className="text-sm font-semibold ws-text mb-1">
-              02. National Statistical Offices (City-Level Detail)
+              02. National Statistical Offices (48 Economies &amp; 138 Metropolitan Hubs)
             </h3>
             <p className="ws-text-muted mb-3">
-              Municipal population, metro area boundaries, and regional GDP shares are cross-referenced with national statistical agencies, including complete 15-city rosters for Indonesia (BPS) and Canada (Statistics Canada).
+              Municipal population, metro area boundaries, and regional GDP shares are cross-referenced with 48 national statistical agencies, including complete 15-city rosters for Indonesia (BPS) and Canada (Statistics Canada). Representative agencies shown below:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
               {HIGHLIGHTED_NATIONAL_CODES.map((code) => {
@@ -233,6 +239,15 @@ export function SourceFootprintModal({ open, dataYear, onClose }: SourceFootprin
                 </p>
                 <p className="ws-text-muted mt-1">
                   Every exported CSV file and PDF briefing automatically stamps the active reporting year ({dataYear}) and corresponding institutional and national sources.
+                </p>
+              </div>
+              <div className="ws-inset p-3 sm:col-span-2">
+                <p className="font-medium ws-text">Global Trade Dual-Reference &amp; Prior-Year Auto-Fallback</p>
+                <p className="font-mono ws-accent mt-1">
+                  Global (WTO / UN Comtrade / IMF DOTS) vs. National Customs (FOB/CIF)
+                </p>
+                <p className="ws-text-muted mt-1">
+                  In the Global Trade tab, users switch freely between harmonized international trade agencies and 48 official national customs/NSO authorities across 2023–2026. Whenever a selected year (e.g., 2026) is not yet released for a country or source, WorldStats automatically falls back to the latest available prior year and flags the effective vintage transparently.
                 </p>
               </div>
             </div>

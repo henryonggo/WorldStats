@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowRightLeft, Building2, Download, ExternalLink, ShieldCheck } from 'lucide-react';
+import { ArrowRightLeft, Building2, Download, ExternalLink, ShieldCheck, Ship, Sparkles } from 'lucide-react';
 import {
   AVAILABLE_DATA_YEARS,
   DEFAULT_DATA_YEAR,
@@ -25,6 +25,7 @@ import {
 } from '../types/worldStats';
 import {
   computeDependencyRatio,
+  computeGlobalIndicatorAverages,
   computeProjectedChange2050Pct,
   computeProjectedGdpGrowth10YrPct,
   computeProjectedGdpTrajectory10Yr,
@@ -47,10 +48,12 @@ interface CountryAnalyticsViewProps {
   dataYear: DataYear;
   onChangeYear: (year: DataYear) => void;
   onSelectCountry: (countryCode: string) => void;
+  onInspectTrade?: (countryCode: string) => void;
   onCompareCities: (cityIds: string[]) => void;
   onExportCsv: () => void;
   onExportPdf: () => void;
   onOpenSources: () => void;
+  onAskAi: (prompt: string) => void;
 }
 
 const CHART_TOOLTIP_STYLE = {
@@ -69,10 +72,12 @@ export function CountryAnalyticsView({
   dataYear,
   onChangeYear,
   onSelectCountry,
+  onInspectTrade,
   onCompareCities,
   onExportCsv,
   onExportPdf,
   onOpenSources,
+  onAskAi,
 }: CountryAnalyticsViewProps) {
   const [scenarioView, setScenarioView] = useState<'all' | ProjectionScenario>('all');
 
@@ -99,6 +104,11 @@ export function CountryAnalyticsView({
   const multiSourceComparison = useMemo(
     () => buildCountryMultiSourceComparison(selectedCountry, dataYear),
     [selectedCountry, dataYear]
+  );
+
+  const globalAvg = useMemo(
+    () => computeGlobalIndicatorAverages(countries),
+    [countries]
   );
 
   const pyramidData = useMemo(() => {
@@ -179,6 +189,29 @@ export function CountryAnalyticsView({
               </select>
             </label>
 
+            {onInspectTrade && (
+              <button
+                type="button"
+                onClick={() => onInspectTrade(selectedCountry.code)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium ws-btn-subtle transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Ship className="w-3.5 h-3.5 ws-accent" />
+                <span>Trade Flows</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                onAskAi(
+                  `Provide a concise ${dataYear} policy & economic briefing for ${selectedCountry.name} covering aging, 10-year GDP outlook, health/R&D capacity, renewable energy, and inequality.`
+                )
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium ws-nav-active transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Brief</span>
+            </button>
             <button
               type="button"
               onClick={onExportCsv}
@@ -681,6 +714,188 @@ export function CountryAnalyticsView({
           />
         </section>
       </div>
+
+      {/* Multi-Dimensional Policy & Development Scorecard (vs 48-Nation Benchmark) */}
+      <section
+        aria-label="Multi-dimensional development and policy scorecard"
+        className="ws-panel overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-4 border-b ws-border">
+          <div>
+            <h2 className="text-base font-semibold ws-text">
+              Development, Health, Energy &amp; Inequality Scorecard ({selectedCountry.name} · {dataYear})
+            </h2>
+            <p className="text-xs ws-text-muted mt-0.5">
+              Benchmarked against the {countries.length}-economy tracked average (vertical marker on each bar)
+            </p>
+          </div>
+          <span className="text-xs font-mono tabular-nums ws-accent shrink-0">
+            HDI {selectedCountry.indicators.hdiScore.toFixed(3)} · avg {globalAvg.hdiScore.toFixed(3)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y md:divide-y-0 md:divide-x ws-divider-border">
+          {[
+            {
+              pillar: 'Health & Clinical Capacity',
+              rows: [
+                {
+                  label: 'Health Spend (% GDP)',
+                  val: selectedCountry.indicators.healthExpenditurePctGdp,
+                  avg: globalAvg.healthExpenditurePctGdp,
+                  max: 18,
+                  fmt: (v: number) => `${v.toFixed(1)}%`,
+                  tone: 'bg-sky-500',
+                },
+                {
+                  label: 'Physicians / 1,000',
+                  val: selectedCountry.indicators.physiciansPer1000,
+                  avg: globalAvg.physiciansPer1000,
+                  max: 6.5,
+                  fmt: (v: number) => v.toFixed(1),
+                  tone: 'bg-sky-400',
+                },
+                {
+                  label: 'Life Expectancy',
+                  val: selectedCountry.lifeExpectancy,
+                  avg: 78.2,
+                  max: 90,
+                  fmt: (v: number) => `${v.toFixed(1)}y`,
+                  tone: 'bg-emerald-500',
+                },
+              ],
+            },
+            {
+              pillar: 'Education & Innovation',
+              rows: [
+                {
+                  label: 'Adult Literacy',
+                  val: selectedCountry.indicators.literacyRatePct,
+                  avg: globalAvg.literacyRatePct,
+                  max: 100,
+                  fmt: (v: number) => `${v.toFixed(1)}%`,
+                  tone: 'bg-indigo-500',
+                },
+                {
+                  label: 'Tertiary Enrollment',
+                  val: selectedCountry.indicators.tertiaryEnrollmentPct,
+                  avg: globalAvg.tertiaryEnrollmentPct,
+                  max: 100,
+                  fmt: (v: number) => `${v.toFixed(1)}%`,
+                  tone: 'bg-indigo-400',
+                },
+                {
+                  label: 'R&D Spend (% GDP)',
+                  val: selectedCountry.indicators.rdExpenditurePctGdp,
+                  avg: globalAvg.rdExpenditurePctGdp,
+                  max: 6.2,
+                  fmt: (v: number) => `${v.toFixed(2)}%`,
+                  tone: 'bg-violet-500',
+                },
+              ],
+            },
+            {
+              pillar: 'Energy & Environment',
+              rows: [
+                {
+                  label: 'Renewable Electricity',
+                  val: selectedCountry.indicators.renewableEnergyPct,
+                  avg: globalAvg.renewableEnergyPct,
+                  max: 100,
+                  fmt: (v: number) => `${v.toFixed(1)}%`,
+                  tone: 'bg-emerald-500',
+                },
+                {
+                  label: 'CO₂ / Capita (tons)',
+                  val: selectedCountry.indicators.co2PerCapitaTons,
+                  avg: globalAvg.co2PerCapitaTons,
+                  max: 21,
+                  fmt: (v: number) => `${v.toFixed(1)}t`,
+                  tone: 'bg-amber-500',
+                },
+                {
+                  label: 'PM2.5 Air (µg/m³)',
+                  val: selectedCountry.indicators.pm25AirQuality,
+                  avg: globalAvg.pm25AirQuality,
+                  max: 70,
+                  fmt: (v: number) => `${v.toFixed(1)}`,
+                  tone: 'bg-rose-500',
+                },
+              ],
+            },
+            {
+              pillar: 'Inequality & Digital Access',
+              rows: [
+                {
+                  label: 'Gini Index (0–100)',
+                  val: selectedCountry.indicators.giniIndex,
+                  avg: globalAvg.giniIndex,
+                  max: 65,
+                  fmt: (v: number) => v.toFixed(1),
+                  tone: 'bg-amber-500',
+                },
+                {
+                  label: 'Internet Penetration',
+                  val: selectedCountry.indicators.internetPenetrationPct,
+                  avg: globalAvg.internetPenetrationPct,
+                  max: 100,
+                  fmt: (v: number) => `${v.toFixed(1)}%`,
+                  tone: 'bg-sky-500',
+                },
+                {
+                  label: 'UN HDI Score',
+                  val: selectedCountry.indicators.hdiScore,
+                  avg: globalAvg.hdiScore,
+                  max: 1.0,
+                  fmt: (v: number) => v.toFixed(3),
+                  tone: 'bg-emerald-500',
+                },
+              ],
+            },
+          ].map((group) => (
+            <div key={group.pillar} className="p-4 space-y-3 ws-divider-border">
+              <h3 className="text-xs font-semibold ws-text">{group.pillar}</h3>
+              <div className="space-y-3">
+                {group.rows.map((item) => {
+                  const pct = Math.max(2, Math.min(100, (item.val / item.max) * 100));
+                  const avgPct = Math.max(2, Math.min(98, (item.avg / item.max) * 100));
+                  return (
+                    <div key={item.label} className="space-y-1">
+                      <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                        <span className="ws-text-2">{item.label}</span>
+                        <span className="font-mono tabular-nums ws-text font-medium">
+                          {item.fmt(item.val)}{' '}
+                          <span className="ws-text-muted font-normal">
+                            (avg {item.fmt(item.avg)})
+                          </span>
+                        </span>
+                      </div>
+                      <div className="relative h-2 w-full ws-inset overflow-hidden">
+                        <div
+                          className={`h-full ${item.tone} opacity-85`}
+                          style={{ width: `${pct}%` }}
+                        />
+                        <div
+                          aria-hidden="true"
+                          title={`Tracked avg: ${item.fmt(item.avg)}`}
+                          className="absolute top-0 bottom-0 w-0.5 bg-current ws-text opacity-80"
+                          style={{ left: `${avgPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <SourceFootnote
+          sourceText={`WHO Global Health Observatory · UNESCO UIS · UNDP HDI · IEA & Global Carbon Project · World Bank WDI (${dataYear} Series)`}
+          vintage={`${dataYear} Multi-Dimensional Indicators`}
+          onOpenSources={onOpenSources}
+        />
+      </section>
 
       {/* Multi-Source Data Comparison: Official National Office vs International Agencies */}
       <section

@@ -1,11 +1,17 @@
 import type {
   AgeBracket,
+  BaseCountryRecord,
   CityRecord,
   CountryRecord,
   GdpDemographicSeriesPoint,
   PopulationProjection,
   Region,
 } from '../types/worldStats';
+import {
+  COUNTRY_INDICATORS_BY_CODE,
+  EXPANDED_CITIES,
+  EXPANDED_COUNTRIES,
+} from './worldDatasetExpansion';
 
 function makeAgeBrackets(shares: [number, number, number, number, number, number, number]): AgeBracket[] {
   const groups: AgeBracket['group'][] = ['0-14', '15-24', '25-34', '35-44', '45-54', '55-64', '65+'];
@@ -70,7 +76,7 @@ function makeGdpSeries(
   });
 }
 
-export const COUNTRIES: CountryRecord[] = [
+const BASE_COUNTRIES: BaseCountryRecord[] = [
   {
     isoNumeric: '840',
     code: 'USA',
@@ -505,7 +511,12 @@ export const COUNTRIES: CountryRecord[] = [
   },
 ];
 
-export const CITIES: CityRecord[] = [
+export const COUNTRIES: CountryRecord[] = [...BASE_COUNTRIES, ...EXPANDED_COUNTRIES].map((country) => ({
+  ...country,
+  indicators: COUNTRY_INDICATORS_BY_CODE[country.code],
+}));
+
+const BASE_CITIES: CityRecord[] = [
   // USA
   {
     id: 'usa-nyc', name: 'New York City', countryCode: 'USA', countryName: 'United States', region: 'North America',
@@ -1134,6 +1145,8 @@ export const CITIES: CityRecord[] = [
   },
 ];
 
+export const CITIES: CityRecord[] = [...BASE_CITIES, ...EXPANDED_CITIES];
+
 export const REGION_COLORS: Record<Region, string> = {
   'North America': '#38BDF8',
   Europe: '#818CF8',
@@ -1178,10 +1191,22 @@ export const COMPARISON_PRESETS = [
     cityIds: ['idn-jkt', 'idn-sub', 'can-tor', 'can-van'],
   },
   {
+    id: 'europe-innovation',
+    label: 'European Tech & Finance',
+    description: 'Cross-country: Zurich, Amsterdam, Stockholm, Dublin',
+    cityIds: ['che-zrh', 'nld-ams', 'swe-sto', 'irl-dub'],
+  },
+  {
+    id: 'asean-growth',
+    label: 'ASEAN & Gulf Hubs',
+    description: 'Cross-country: Singapore, Bangkok, Kuala Lumpur, Dubai',
+    cityIds: ['sgp-sin', 'tha-bkk', 'mys-kul', 'are-dxb'],
+  },
+  {
     id: 'same-country-usa',
     label: 'US Metros (Same Country)',
-    description: 'Same country: New York, San Francisco, Austin',
-    cityIds: ['usa-nyc', 'usa-sfo', 'usa-aus'],
+    description: 'Same country: New York, San Francisco, Austin, Chicago',
+    cityIds: ['usa-nyc', 'usa-sfo', 'usa-aus', 'usa-chi'],
   },
   {
     id: 'same-country-jpn',

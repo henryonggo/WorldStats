@@ -28,35 +28,100 @@ const METRIC_OPTIONS: Array<{
   label: string;
   legendLow: string;
   legendHigh: string;
+  palette: [string, string, string, string, string];
 }> = [
-  { key: 'populationMillions', label: 'Population', legendLow: '5M', legendHigh: '1.47B' },
-  { key: 'gdpPerCapita', label: 'GDP / Capita', legendLow: '$1.6K', legendHigh: '$94K' },
-  { key: 'medianAge', label: 'Median Age', legendLow: '18 yrs', legendHigh: '50 yrs' },
-  { key: 'projectedChange2050', label: '2050 Growth', legendLow: '-16%', legendHigh: '+54%' },
+  {
+    key: 'gdpPerCapita',
+    label: 'GDP / Capita',
+    legendLow: '$1.3K',
+    legendHigh: '$107K',
+    palette: ['#1E3A52', '#1C5B6E', '#117A7F', '#0D9488', '#10B981'],
+  },
+  {
+    key: 'populationMillions',
+    label: 'Population',
+    legendLow: '5M',
+    legendHigh: '1.47B',
+    palette: ['#16324F', '#1B4B72', '#1D6A96', '#2191C4', '#38BDF8'],
+  },
+  {
+    key: 'medianAge',
+    label: 'Median Age',
+    legendLow: '18 yrs',
+    legendHigh: '50 yrs',
+    palette: ['#4A2E1B', '#7A451B', '#B45D18', '#D97706', '#F59E0B'],
+  },
+  {
+    key: 'projectedChange2050',
+    label: '2050 Growth',
+    legendLow: '-16%',
+    legendHigh: '+60%',
+    palette: ['#BE123C', '#E11D48', '#1D4ED8', '#0284C7', '#10B981'],
+  },
+  {
+    key: 'hdiScore',
+    label: 'HDI Score',
+    legendLow: '0.49',
+    legendHigh: '0.97',
+    palette: ['#312E81', '#4338CA', '#4F46E5', '#6366F1', '#38BDF8'],
+  },
+  {
+    key: 'renewableEnergyPct',
+    label: 'Renewables %',
+    legendLow: '3%',
+    legendHigh: '98%',
+    palette: ['#1F2937', '#115E59', '#0F766E', '#059669', '#34D399'],
+  },
+  {
+    key: 'co2PerCapitaTons',
+    label: 'CO₂ / Capita',
+    legendLow: '0.2t',
+    legendHigh: '20t',
+    palette: ['#065F46', '#047857', '#D97706', '#EA580C', '#DC2626'],
+  },
+  {
+    key: 'giniIndex',
+    label: 'Gini Inequality',
+    legendLow: '26',
+    legendHigh: '63',
+    palette: ['#0D9488', '#0284C7', '#D97706', '#EA580C', '#BE123C'],
+  },
 ];
 
 function interpolateColor(metric: MapMetricKey, country: CountryRecord): string {
+  const spec = METRIC_OPTIONS.find((m) => m.key === metric)!;
+  const p = spec.palette;
+  const pick = (t: number) => p[Math.max(0, Math.min(p.length - 1, Math.floor(t * p.length)))];
+
   if (metric === 'populationMillions') {
     const t = Math.min(1, Math.log10(Math.max(5, country.populationMillions)) / Math.log10(1500));
-    const palette = ['#16324F', '#1B4B72', '#1D6A96', '#2191C4', '#38BDF8'];
-    return palette[Math.min(palette.length - 1, Math.floor(t * palette.length))];
+    return pick(t);
   }
   if (metric === 'gdpPerCapita') {
-    const t = Math.min(1, country.gdpPerCapita / 85000);
-    const palette = ['#1E3A52', '#1C5B6E', '#117A7F', '#0D9488', '#10B981'];
-    return palette[Math.min(palette.length - 1, Math.floor(t * palette.length))];
+    return pick(Math.min(1, country.gdpPerCapita / 95000));
   }
   if (metric === 'medianAge') {
-    const t = Math.max(0, Math.min(1, (country.medianAge - 18) / 32));
-    const palette = ['#4A2E1B', '#7A451B', '#B45D18', '#D97706', '#F59E0B'];
-    return palette[Math.min(palette.length - 1, Math.floor(t * palette.length))];
+    return pick(Math.max(0, Math.min(1, (country.medianAge - 18) / 32)));
   }
-  const change = computeProjectedChange2050Pct(country);
-  if (change <= -10) return '#BE123C';
-  if (change < 0) return '#E11D48';
-  if (change < 10) return '#1D4ED8';
-  if (change < 25) return '#0284C7';
-  return '#10B981';
+  if (metric === 'projectedChange2050') {
+    const change = computeProjectedChange2050Pct(country);
+    if (change <= -10) return p[0];
+    if (change < 0) return p[1];
+    if (change < 10) return p[2];
+    if (change < 25) return p[3];
+    return p[4];
+  }
+  if (metric === 'hdiScore') {
+    return pick(Math.max(0, Math.min(1, (country.indicators.hdiScore - 0.48) / 0.50)));
+  }
+  if (metric === 'renewableEnergyPct') {
+    return pick(Math.max(0, Math.min(1, country.indicators.renewableEnergyPct / 98)));
+  }
+  if (metric === 'co2PerCapitaTons') {
+    return pick(Math.max(0, Math.min(1, country.indicators.co2PerCapitaTons / 18)));
+  }
+  // giniIndex
+  return pick(Math.max(0, Math.min(1, (country.indicators.giniIndex - 25) / 38)));
 }
 
 const WIDTH = 920;
@@ -109,7 +174,11 @@ export function WorldChoroplethMap({
     if (metric === 'populationMillions') return `${c.populationMillions.toFixed(1)}M`;
     if (metric === 'gdpPerCapita') return formatCurrency(c.gdpPerCapita);
     if (metric === 'medianAge') return `${c.medianAge.toFixed(1)} yrs`;
-    return formatSignedPct(computeProjectedChange2050Pct(c));
+    if (metric === 'projectedChange2050') return formatSignedPct(computeProjectedChange2050Pct(c));
+    if (metric === 'hdiScore') return c.indicators.hdiScore.toFixed(3);
+    if (metric === 'renewableEnergyPct') return `${c.indicators.renewableEnergyPct.toFixed(1)}%`;
+    if (metric === 'co2PerCapitaTons') return `${c.indicators.co2PerCapitaTons.toFixed(1)} t`;
+    return `${c.indicators.giniIndex.toFixed(1)}`;
   };
 
   return (
@@ -118,37 +187,33 @@ export function WorldChoroplethMap({
       className="ws-panel overflow-hidden"
     >
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-5 py-4 border-b ws-border">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-5 py-4 border-b ws-border">
         <div>
           <h2 className="text-base font-semibold ws-text">
             Interactive Global Choropleth &amp; City Distribution ({dataYear})
           </h2>
           <p className="text-xs ws-text-muted mt-0.5">
-            Click any highlighted country to inspect full age pyramid &amp; GDP trends, or select a city node.
+            Click any highlighted country ({countries.length} nations) to open its full breakdown, or click any city node.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div
-            role="group"
-            aria-label="Map metric selector"
-            className="grid grid-cols-2 sm:inline-flex items-center gap-0.5 p-0.5 ws-inset w-full sm:w-auto"
-          >
-            {METRIC_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setMetric(opt.key)}
-                className={`px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 text-center cursor-pointer ${
-                  metric === opt.key
-                    ? 'ws-nav-active'
-                    : 'ws-text-muted hover:ws-text border border-transparent ws-radius-sm'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <label className="inline-flex items-center gap-1.5 text-xs ws-text-muted">
+            <span className="whitespace-nowrap">Map Layer</span>
+            <select
+              aria-label="Select map metric layer"
+              data-testid="map-metric-select"
+              value={metric}
+              onChange={(e) => setMetric(e.target.value as MapMetricKey)}
+              className="ws-input px-2.5 py-1.5 text-xs font-medium focus:outline-none cursor-pointer"
+            >
+              {METRIC_OPTIONS.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <button
             type="button"
@@ -237,9 +302,9 @@ export function WorldChoroplethMap({
                   <span className="font-mono tabular-nums text-right ws-text-2">
                     ${hoveredCountry.gdpTrillions.toFixed(2)}T
                   </span>
-                  <span className="ws-text-muted">Median Age</span>
+                  <span className="ws-text-muted">HDI / Renewables</span>
                   <span className="font-mono tabular-nums text-right ws-text-2">
-                    {hoveredCountry.medianAge.toFixed(1)} yrs
+                    {hoveredCountry.indicators.hdiScore.toFixed(3)} · {hoveredCountry.indicators.renewableEnergyPct.toFixed(0)}%
                   </span>
                 </div>
               </div>
@@ -250,7 +315,7 @@ export function WorldChoroplethMap({
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           role="img"
-          aria-label="World choropleth map showing demographic and GDP metrics"
+          aria-label="World choropleth map showing demographic, GDP, energy, and development metrics"
           className="w-full h-auto max-h-[430px] block select-none"
         >
           <g
@@ -283,6 +348,7 @@ export function WorldChoroplethMap({
                 <path
                   key={`${idStr}-${i}`}
                   d={d}
+                  data-map-country={matched?.code}
                   fill={fill}
                   fillOpacity={matched ? (isHovered || isSelected ? 1 : 0.92) : 0.85}
                   stroke={
@@ -310,18 +376,18 @@ export function WorldChoroplethMap({
               cities.map((city) => {
                 const coords = projection([city.lng, city.lat]);
                 if (!coords) return null;
-                const radius = Math.max(2.6, Math.min(6.4, Math.sqrt(city.metroPopulation / 1_000_000) * 1.15)) / Math.sqrt(zoom);
+                const radius = Math.max(2.3, Math.min(5.8, Math.sqrt(city.metroPopulation / 1_000_000) * 1.05)) / Math.sqrt(zoom);
                 const isCityHovered = hoveredCity?.id === city.id;
                 return (
                   <circle
                     key={city.id}
                     cx={coords[0]}
                     cy={coords[1]}
-                    r={isCityHovered ? radius * 1.45 : radius}
+                    r={isCityHovered ? radius * 1.5 : radius}
                     fill="#F59E0B"
-                    fillOpacity={isCityHovered ? 1 : 0.9}
+                    fillOpacity={isCityHovered ? 1 : 0.88}
                     stroke="var(--ws-map-stroke)"
-                    strokeWidth={0.9 / Math.sqrt(zoom)}
+                    strokeWidth={0.8 / Math.sqrt(zoom)}
                     className="cursor-pointer"
                     onMouseEnter={() => setHoveredCity(city)}
                     onMouseLeave={() => setHoveredCity(null)}
@@ -342,55 +408,26 @@ export function WorldChoroplethMap({
           <span>Scale ({activeMetricSpec.label}):</span>
           <span className="font-mono tabular-nums ws-text-2">{activeMetricSpec.legendLow}</span>
           <div className="flex items-center gap-0.5" aria-hidden="true">
-            {metric === 'populationMillions' && (
-              <>
-                <span className="w-5 h-2 rounded-xs bg-[#16324F]" />
-                <span className="w-5 h-2 rounded-xs bg-[#1B4B72]" />
-                <span className="w-5 h-2 rounded-xs bg-[#1D6A96]" />
-                <span className="w-5 h-2 rounded-xs bg-[#2191C4]" />
-                <span className="w-5 h-2 rounded-xs bg-[#38BDF8]" />
-              </>
-            )}
-            {metric === 'gdpPerCapita' && (
-              <>
-                <span className="w-5 h-2 rounded-xs bg-[#1E3A52]" />
-                <span className="w-5 h-2 rounded-xs bg-[#1C5B6E]" />
-                <span className="w-5 h-2 rounded-xs bg-[#117A7F]" />
-                <span className="w-5 h-2 rounded-xs bg-[#0D9488]" />
-                <span className="w-5 h-2 rounded-xs bg-[#10B981]" />
-              </>
-            )}
-            {metric === 'medianAge' && (
-              <>
-                <span className="w-5 h-2 rounded-xs bg-[#4A2E1B]" />
-                <span className="w-5 h-2 rounded-xs bg-[#7A451B]" />
-                <span className="w-5 h-2 rounded-xs bg-[#B45D18]" />
-                <span className="w-5 h-2 rounded-xs bg-[#D97706]" />
-                <span className="w-5 h-2 rounded-xs bg-[#F59E0B]" />
-              </>
-            )}
-            {metric === 'projectedChange2050' && (
-              <>
-                <span className="w-5 h-2 rounded-xs bg-[#BE123C]" />
-                <span className="w-5 h-2 rounded-xs bg-[#E11D48]" />
-                <span className="w-5 h-2 rounded-xs bg-[#1D4ED8]" />
-                <span className="w-5 h-2 rounded-xs bg-[#0284C7]" />
-                <span className="w-5 h-2 rounded-xs bg-[#10B981]" />
-              </>
-            )}
+            {activeMetricSpec.palette.map((hex, idx) => (
+              <span
+                key={`${activeMetricSpec.key}-${idx}`}
+                className="w-5 h-2 rounded-xs"
+                style={{ backgroundColor: hex }}
+              />
+            ))}
           </div>
           <span className="font-mono tabular-nums ws-text-2">{activeMetricSpec.legendHigh}</span>
         </div>
 
         <div className="flex items-center gap-4 text-xs ws-text-muted">
-          <span>24 Tracked Nations</span>
+          <span>{countries.length} Tracked Nations</span>
           <span aria-hidden="true">·</span>
-          <span>Amber markers sized by Metro Population</span>
+          <span>Amber nodes sized by Metro Population</span>
         </div>
       </div>
 
       <SourceFootnote
-        sourceText={`Natural Earth / World Atlas TopoJSON · UN DESA WPP (${dataYear}) · IMF WEO (${dataYear}) · National Statistical Offices`}
+        sourceText={`Natural Earth / World Atlas TopoJSON · UN DESA WPP (${dataYear}) · IMF WEO (${dataYear}) · UNDP HDI · IEA & Global Carbon Project`}
         vintage={`${dataYear} Annual Series`}
         onOpenSources={onOpenSources}
       />

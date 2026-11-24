@@ -1,6 +1,8 @@
 import type {
   AgeBracket,
+  AppView,
   CityRecord,
+  CountryDevelopmentIndicators,
   CountryRecord,
   CountrySortKey,
   DataYear,
@@ -8,7 +10,7 @@ import type {
   Region,
   RegressionResult,
 } from '../types/worldStats';
-import { DEFAULT_DATA_YEAR } from '../types/worldStats';
+import { AVAILABLE_DATA_YEARS, DEFAULT_DATA_YEAR } from '../types/worldStats';
 import {
   formatCityDataYear,
   getCitySourceCitation,
@@ -133,6 +135,15 @@ export function projectCountryForYear(
     return b;
   });
 
+  const ind = country.indicators;
+  const indicators: CountryDevelopmentIndicators = {
+    ...ind,
+    co2PerCapitaTons: Number(Math.max(0.1, ind.co2PerCapitaTons * (1 - deltaYears * 0.015)).toFixed(2)),
+    renewableEnergyPct: Number(Math.max(1, Math.min(100, ind.renewableEnergyPct + deltaYears * 1.4)).toFixed(1)),
+    internetPenetrationPct: Number(Math.max(10, Math.min(99.5, ind.internetPenetrationPct + deltaYears * 0.8)).toFixed(1)),
+    hdiScore: Number(Math.max(0.35, Math.min(0.99, ind.hdiScore + deltaYears * 0.002)).toFixed(3)),
+  };
+
   return {
     ...country,
     populationMillions,
@@ -142,6 +153,7 @@ export function projectCountryForYear(
     urbanizationPct,
     lifeExpectancy,
     ageBrackets,
+    indicators,
   };
 }
 
@@ -319,8 +331,44 @@ export function sortCountries(
     if (sortBy === 'projectedChange2050') {
       return (computeProjectedChange2050Pct(a) - computeProjectedChange2050Pct(b)) * dir;
     }
+    if (
+      sortBy === 'hdiScore' ||
+      sortBy === 'healthExpenditurePctGdp' ||
+      sortBy === 'physiciansPer1000' ||
+      sortBy === 'tertiaryEnrollmentPct' ||
+      sortBy === 'rdExpenditurePctGdp' ||
+      sortBy === 'co2PerCapitaTons' ||
+      sortBy === 'renewableEnergyPct' ||
+      sortBy === 'pm25AirQuality' ||
+      sortBy === 'giniIndex' ||
+      sortBy === 'internetPenetrationPct'
+    ) {
+      return (a.indicators[sortBy] - b.indicators[sortBy]) * dir;
+    }
     return (a[sortBy] - b[sortBy]) * dir;
   });
+}
+
+export function computeGlobalIndicatorAverages(
+  countries: CountryRecord[]
+): CountryDevelopmentIndicators {
+  const n = Math.max(1, countries.length);
+  const avg = (fn: (c: CountryRecord) => number, decimals = 1) =>
+    Number((countries.reduce((s, c) => s + fn(c), 0) / n).toFixed(decimals));
+
+  return {
+    healthExpenditurePctGdp: avg((c) => c.indicators.healthExpenditurePctGdp, 1),
+    physiciansPer1000: avg((c) => c.indicators.physiciansPer1000, 1),
+    literacyRatePct: avg((c) => c.indicators.literacyRatePct, 1),
+    tertiaryEnrollmentPct: avg((c) => c.indicators.tertiaryEnrollmentPct, 1),
+    rdExpenditurePctGdp: avg((c) => c.indicators.rdExpenditurePctGdp, 2),
+    co2PerCapitaTons: avg((c) => c.indicators.co2PerCapitaTons, 1),
+    renewableEnergyPct: avg((c) => c.indicators.renewableEnergyPct, 1),
+    pm25AirQuality: avg((c) => c.indicators.pm25AirQuality, 1),
+    giniIndex: avg((c) => c.indicators.giniIndex, 1),
+    internetPenetrationPct: avg((c) => c.indicators.internetPenetrationPct, 1),
+    hdiScore: avg((c) => c.indicators.hdiScore, 3),
+  };
 }
 
 export function computePearsonCorrelation(
@@ -630,6 +678,16 @@ export function buildCountriesCsv(
     'Fertility Rate',
     'Life Expectancy (Years)',
     'Urbanization (%)',
+    'HDI Score',
+    'Health Spend (% GDP)',
+    'Physicians (/1k)',
+    'Tertiary Enrollment (%)',
+    'R&D Spend (% GDP)',
+    'CO2 / Capita (t)',
+    'Renewable Electricity (%)',
+    'PM2.5 Air Quality (ug/m3)',
+    'Gini Index',
+    'Internet Penetration (%)',
     '2050 Projected Pop (M)',
     'Data Source',
   ];
@@ -653,6 +711,16 @@ export function buildCountriesCsv(
       c.fertilityRate,
       c.lifeExpectancy,
       c.urbanizationPct,
+      c.indicators.hdiScore,
+      c.indicators.healthExpenditurePctGdp,
+      c.indicators.physiciansPer1000,
+      c.indicators.tertiaryEnrollmentPct,
+      c.indicators.rdExpenditurePctGdp,
+      c.indicators.co2PerCapitaTons,
+      c.indicators.renewableEnergyPct,
+      c.indicators.pm25AirQuality,
+      c.indicators.giniIndex,
+      c.indicators.internetPenetrationPct,
       p2050,
       getCountrySourceCitation(c.code, dataYear),
     ];
@@ -841,4 +909,168 @@ export function searchGlobalEntities(
     totalMatches: scoredCountries.length + scoredCities.length,
   };
 }
+
+export interface AppUrlState {
+  view?: AppView;
+  year?: DataYear;
+  countryCode?: string;
+  cityId?: string;
+  compareCityIds?: string[];
+  tradeRef?: 'global' | 'national';
+  tradeYear?: 2023 | 2024 | 2025 | 2026;
+}
+
+const VALID_VIEWS = new Set<AppView>(['overview', 'country', 'cities', 'compare', 'trade']);
+const VALID_TRADE_YEARS = new Set<number>([2023, 2024, 2025, 2026]);
+
+export function parseAppUrlState(
+  search: string,
+  validCountryCodes: Set<string>,
+  validCityIds: Set<string>
+): AppUrlState {
+  const params = new URLSearchParams(search.startsWith('?') ? search : `?${search}`);
+  const out: AppUrlState = {};
+
+  const rawView = params.get('view') as AppView | null;
+  if (rawView && VALID_VIEWS.has(rawView)) {
+    out.view = rawView;
+  }
+
+  const rawYear = Number(params.get('year'));
+  if (AVAILABLE_DATA_YEARS.includes(rawYear as DataYear)) {
+    out.year = rawYear as DataYear;
+  }
+
+  const rawCountry = params.get('country')?.toUpperCase();
+  if (rawCountry && validCountryCodes.has(rawCountry)) {
+    out.countryCode = rawCountry;
+  }
+
+  const rawCity = params.get('city');
+  if (rawCity && validCityIds.has(rawCity)) {
+    out.cityId = rawCity;
+  }
+
+  const rawCities = params.get('cities');
+  if (rawCities) {
+    const parsed = Array.from(
+      new Set(
+        rawCities
+          .split(',')
+          .map((s) => s.trim())
+          .filter((id) => validCityIds.has(id))
+      )
+    ).slice(0, 4);
+    if (parsed.length > 0) {
+      out.compareCityIds = parsed;
+    }
+  }
+
+  const rawTradeRef = params.get('tradeRef');
+  if (rawTradeRef === 'global' || rawTradeRef === 'national') {
+    out.tradeRef = rawTradeRef;
+  }
+
+  const rawTradeYear = Number(params.get('tradeYear'));
+  if (VALID_TRADE_YEARS.has(rawTradeYear)) {
+    out.tradeYear = rawTradeYear as 2023 | 2024 | 2025 | 2026;
+  }
+
+  return out;
+}
+
+export function buildAppUrlSearch(state: {
+  view: AppView;
+  year: DataYear;
+  countryCode: string;
+  cityId: string | null;
+  compareCityIds: string[];
+  tradeRef?: 'global' | 'national';
+  tradeYear?: 2023 | 2024 | 2025 | 2026;
+}): string {
+  const params = new URLSearchParams();
+  params.set('view', state.view);
+  params.set('year', String(state.year));
+  if (state.view === 'country') {
+    params.set('country', state.countryCode);
+  } else if (state.view === 'trade') {
+    params.set('country', state.countryCode);
+    if (state.tradeRef) params.set('tradeRef', state.tradeRef);
+    if (state.tradeYear) params.set('tradeYear', String(state.tradeYear));
+  } else if (state.view === 'cities' && state.cityId) {
+    params.set('city', state.cityId);
+  } else if (state.view === 'compare' && state.compareCityIds.length > 0) {
+    params.set('cities', state.compareCityIds.slice(0, 4).join(','));
+  }
+  return `?${params.toString()}`;
+}
+
+/**
+ * Produces a dense, accurate tabular text summary of all 48 economies and the
+ * currently focused cities (plus optional trade summary) so the server-side AI
+ * Analyst can answer natural-language queries & scenario prompts grounded strictly
+ * in WorldStats data.
+ */
+export function buildAiContextSnapshot(
+  countries: CountryRecord[],
+  cities: CityRecord[],
+  options: {
+    activeView: AppView;
+    dataYear: DataYear;
+    selectedCountryCode: string;
+    selectedCityId: string | null;
+    compareCityIds: string[];
+    tradeSummaryBlock?: string;
+  }
+): string {
+  const countryHeader =
+    'COUNTRIES (Code|Name|Region|PopM|GDP$T|GDP/Cap|GDPGr%|10YrGDP%|MedAge|Work%|2050Pop%|HDI|CO2t|Renew%|Health%GDP|RD%GDP|Gini):';
+  const countryLines = countries.map((c) => {
+    const w = computeWorkingAgeShare(c.ageBrackets);
+    const p50 = computeProjectedChange2050Pct(c);
+    const g10 = computeProjectedGdpGrowth10YrPct(c, options.dataYear);
+    const i = c.indicators;
+    return `${c.code}|${c.name}|${c.region}|${c.populationMillions}|${c.gdpTrillions}|${c.gdpPerCapita}|${c.gdpGrowthPct}|${g10}|${c.medianAge}|${w}|${p50}|${i.hdiScore}|${i.co2PerCapitaTons}|${i.renewableEnergyPct}|${i.healthExpenditurePctGdp}|${i.rdExpenditurePctGdp}|${i.giniIndex}`;
+  });
+
+  const relevantCities = cities.filter(
+    (city) =>
+      city.countryCode === options.selectedCountryCode ||
+      city.id === options.selectedCityId ||
+      options.compareCityIds.includes(city.id)
+  );
+  // Also include top 15 global cities by GDP so cross-city questions always have coverage
+  const topGlobalCities = [...cities]
+    .sort((a, b) => b.gdpBillions - a.gdpBillions)
+    .slice(0, 15);
+  const cityMap = new Map<string, CityRecord>();
+  for (const c of [...relevantCities, ...topGlobalCities]) {
+    cityMap.set(c.id, c);
+  }
+
+  const cityHeader =
+    'CITIES (id|Name|CountryCode|Pop|MetroPop|CityGDP$B|GDP/Cap|MedAge|PopGr%|2050Pop|Sector):';
+  const cityLines = Array.from(cityMap.values()).map(
+    (c) =>
+      `${c.id}|${c.name}|${c.countryCode}|${c.population}|${c.metroPopulation}|${c.gdpBillions}|${c.gdpPerCapita}|${c.medianAge}|${c.annualPopGrowthPct}|${c.projected2050}|${c.primarySector}`
+  );
+
+  const sections = [
+    `Reporting Year: ${options.dataYear} | Tracked Economies: ${countries.length} | Tracked Cities: ${cities.length}`,
+    `Focused Country: ${options.selectedCountryCode} | Active Compare Cities: ${options.compareCityIds.join(', ')}`,
+    '',
+    countryHeader,
+    ...countryLines,
+    '',
+    cityHeader,
+    ...cityLines,
+  ];
+
+  if (options.tradeSummaryBlock) {
+    sections.push('', options.tradeSummaryBlock);
+  }
+
+  return sections.join('\n');
+}
+
 
